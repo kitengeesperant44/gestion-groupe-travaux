@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta name="theme-color" content="#102447">
+    <meta name="description" content="Plateforme de gestion des groupes de travaux des étudiants de L2 SIG.">
+
+    <title>Gestion de groupe de travaux</title>
+
+    <link rel="stylesheet" href="css/style.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+
+<body>
+
+    <!-- EN-TÊTE -->
+    <header class="main-header">
+
+        <div class="header-content">
+
+            <div class="logo">
+                <div class="logo-icon">GT</div>
+
+                <div class="logo-text">
+                    <h2>Gestion de groupe de travaux</h2>
+                    <p>Plateforme académique · L2 SIG</p>
+                </div>
+            </div>
+
+        </div>
+
+    </header>
+
+
+    <main class="container">
+
+        <!-- CONNEXION -->
+        <section class="card login-card" id="connexion">
+
+            <div class="login-heading">
+                <span class="badge">ESPACE ACADÉMIQUE</span>
+
+                <h3>Bienvenue !</h3>
+
+                <p class="small">
+                    Connectez-vous pour accéder à votre espace de travail.
+                </p>
+            </div>
+
+            <div class="form-group">
+                <label for="matricule">Matricule</label>
+
+                <input
+                    type="text"
+                    id="matricule"
+                    placeholder="Entrez votre matricule"
+                    autocomplete="username"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="password">Mot de passe</label>
+
+                <input
+                    type="password"
+                    id="password"
+                    placeholder="Entrez votre mot de passe"
+                    autocomplete="current-password"
+                >
+            </div>
+
+            <button id="boutonConnexion" onclick="seConnecter()">
+                Se connecter
+            </button>
+
+            <p class="message" id="messageConnexion"></p>
+
+            <p class="login-footer">
+                Accès réservé aux étudiants et à l'administration.
+            </p>
+
+        </section>
+
+
+        <!-- ESPACE ADMINISTRATEUR -->
+        <section id="espaceAdmin" class="espace">
+
+            <!-- IDENTITE ADMIN -->
+            <div class="dashboard-heading">
+                <span class="badge">ADMINISTRATEUR</span>
+
+                <h2>Espace administration</h2>
+
+                <p class="small">
+                    Gérez les étudiants, les activités et les groupes de travaux.
+                </p>
+
+                <p id="identiteAdmin"></p>
+            </div>
+
+
+            <!-- ACTIVITES ADMIN : PREMIERE POSITION -->
+            <div class="card">
+
+                <div class="section-heading">
+                    <span class="section-number">01</span>
+
+                    <div>
+                        <h3>Activités de la classe</h3>
+                        <p class="small">Suivez les activités et leurs groupes.</p>
+                    </div>
+                </div>
+
+                <div id="listeActivitesAdmin">
+                    Chargement des activités...
+                </div>
+
+                <button onclick="chargerActivites()">
+                    Actualiser les activités
+                </button>
+
+            </div>
+
+
+            <!-- MEMBRES : DEUXIEME POSITION -->
+            <div class="card">
+
+                <div class="section-heading">
+                    <span class="section-number">02</span>
+
+                    <div>
+                        <h3>Liste des étudiants</h3>
+                        <p class="small">Consultez les membres de la classe.</p>
+                    </div>
+                </div>
+
+                <p class="small" id="nombreAdmin"></p>
+
+                <div id="listeAdmin">
+                    Chargement...
+                </div>
+
+                <button onclick="chargerEtudiants('listeAdmin', 'nombreAdmin')">
+                    Actualiser la liste
+                </button>
+
+            </div>
+
+
+            <!-- CREER ETUDIANT -->
+            <div class="card">
+
+                <div class="section-heading">
+                    <span class="section-number">03</span>
+
+                    <div>
+                        <h3>Créer un étudiant</h3>
+                        <p class="small">Ajouter un nouveau compte étudiant.</p>
+                    </div>
+                </div>
+
+                <label for="nouveauMatricule">Matricule</label>
+
+                <input
+                    type="text"
+                    id="nouveauMatricule"
+                    placeholder="Ex : 7640"
+                >
+
+                <label for="nouveauNom">Nom complet</label>
+
+                <input
+                    type="text"
+                    id="nouveauNom"
+                    placeholder="Nom de l'étudiant"
+                >
+
+                <label for="nouveauPassword">Mot de passe</label>
+
+                <input
+                    type="password"
+                    id="nouveauPassword"
+                    placeholder="Minimum 8 caractères"
+                >
+
+                <button id="boutonCreation" onclick="creerEtudiant()">
+                    Créer le compte
+                </button>
+
+                <p class="message" id="messageCreation"></p>
+
+            </div>
+
+
+            <!-- CREATION ACTIVITE -->
+            <div class="card">
+
+                <div class="section-heading">
+                    <span class="section-number">04</span>
+
+                    <div>
+                        <h3>Créer une activité</h3>
+                        <p class="small">Organisez un nouveau travail en groupe.</p>
+                    </div>
+                </div>
+
+                <label for="titreActivite">Nom de l'activité</label>
+
+                <input
+                    type="text"
+                    id="titreActivite"
+                    placeholder="Ex : TP de programmation"
+                >
+
+                <label for="nombreMax">
+                    Nombre maximum d'étudiants par groupe
+                </label>
+
+                <input
+                    type="number"
+                    id="nombreMax"
+                    placeholder="Ex : 5"
+                    min="2"
+                >
+
+                <label for="dureeActivite">Durée (en minutes)</label>
+
+                <input
+                    type="number"
+                    id="dureeActivite"
+                    placeholder="Ex : 60"
+                    min="1"
+                >
+
+                <button id="boutonActivite" onclick="creerActivite()">
+                    Créer l'activité
+                </button>
+
+                <p class="message" id="messageActivite"></p>
+
+            </div>
+
+
+            <!-- GROUPES ADMIN -->
+            <div id="groupesAdmin"></div>
+
+
+            <!-- DECONNEXION : DERNIERE POSITION -->
+            <div class="card">
+                <button class="logout" onclick="deconnexion()">
+                    Déconnexion
+                </button>
+            </div>
+
+        </section>
+
+
+        <!-- PAGE DES GROUPES -->
+        <section id="pageGroupes" class="espace" style="display: none;">
+
+            <div class="card">
+
+                <button class="btn-retour" onclick="retourActivites()">
+                    ← Retour aux activités
+                </button>
+
+                <h2 id="titreActiviteGroupes">
+                    Groupes de l'activité
+                </h2>
+
+                <div id="listeGroupesPage">
+                    Chargement des groupes...
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- ESPACE ETUDIANT -->
+        <section id="espaceEtudiant" class="espace">
+
+            <!-- IDENTITE ETUDIANT -->
+            <div class="dashboard-heading">
+
+                <span class="badge">ESPACE ÉTUDIANT</span>
+
+                <h2>Mon espace de travail</h2>
+
+                <p class="small">
+                    Retrouvez vos camarades, vos activités et vos groupes.
+                </p>
+
+                <p id="identiteEtudiant"></p>
+
+            </div>
+
+
+            <!-- ACTIVITES ETUDIANT : PREMIERE POSITION -->
+            <div class="card">
+
+                <div class="section-heading">
+                    <span class="section-number">01</span>
+
+                    <div>
+                        <h3>Activités disponibles</h3>
+                        <p class="small">Participez aux travaux de la classe.</p>
+                    </div>
+                </div>
+
+                <div id="listeActivitesEtudiant">
+                    Chargement des activités...
+                </div>
+
+                <button onclick="chargerActivites()">
+                    Actualiser les activités
+                </button>
+
+            </div>
+
+
+            <!-- MEMBRES : DEUXIEME POSITION -->
+            <div class="card">
+
+                <div class="section-heading">
+                    <span class="section-number">02</span>
+
+                    <div>
+                        <h3>Liste des étudiants de L2 SIG</h3>
+                        <p class="small">Découvrez les membres de votre classe.</p>
+                    </div>
+                </div>
+
+                <p class="small" id="nombreEtudiant"></p>
+
+                <div id="listeEtudiant">
+                    Chargement...
+                </div>
+
+                <button onclick="chargerEtudiants('listeEtudiant', 'nombreEtudiant')">
+                    Actualiser la liste
+                </button>
+
+            </div>
+
+
+            <!-- GROUPES ETUDIANT -->
+            <div id="groupesEtudiant"></div>
+
+
+            <!-- DECONNEXION : DERNIERE POSITION -->
+            <div class="card">
+                <button class="logout" onclick="deconnexion()">
+                    Déconnexion
+                </button>
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <!-- PIED DE PAGE -->
+    <footer class="main-footer">
+
+        <p>Gestion de groupe de travaux</p>
+
+        <span>Plateforme académique · L2 SIG</span>
+
+    </footer>
+
+
+    <!-- JAVASCRIPT -->
+    <script src="js/supabase.js"></script>
+    <script src="js/connexion.js"></script>
+    <script src="js/etudiants.js"></script>
+    <script src="js/activites.js"></script>
+    <script src="js/app.js"></script>
+
+</body>
+</html>
