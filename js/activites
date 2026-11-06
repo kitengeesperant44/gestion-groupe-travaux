@@ -1,0 +1,890 @@
+// GESTION DES ACTIVITES
+
+let intervalleChrono = null;
+
+
+// MEMORISER L'ACTIVITE ACTUELLEMENT OUVERTE
+
+let activiteActuelle = {
+    id: null,
+    nombreMax: null,
+    titre: null
+};
+
+
+// CHARGER LES ACTIVITES
+
+async function chargerActivites() {
+
+    const admin = document.getElementById("listeActivitesAdmin");
+    const etudiant = document.getElementById("listeActivitesEtudiant");
+
+    const { data, error } = await client
+        .from("activites")
+        .select(`
+            id,
+            titre,
+            nombre_max,
+            duree_minutes,
+            date_debut,
+            date_fin,
+            statut,
+            nombre_etudiants,
+            nombre_max_groupes
+        `)
+        .order("date_debut", { ascending: false });
+
+    if (error) {
+        if (admin) admin.textContent = "Erreur : " + error.message;
+        if (etudiant) etudiant.textContent = "Erreur : " + error.message;
+        return;
+    }
+
+    afficherActivites(data, admin);
+    afficherActivites(data, etudiant);
+
+    if (intervalleChrono !== null) {
+        clearInterval(intervalleChrono);
+    }
+
+    actualiserChronos();
+
+    intervalleChrono = setInterval(actualiserChronos, 1000);
+}
+
+
+// AFFICHER LES ACTIVITES
+
+function afficherActivites(activites, conteneur) {
+
+    if (!conteneur) return;
+
+    conteneur.innerHTML = "";
+
+    if (!activites || activites.length === 0) {
+        conteneur.textContent = "Aucune activité enregistrée.";
+        return;
+    }
+
+    activites.forEach(function(activite) {
+
+        const carte = document.createElement("div");
+        carte.className = "activite-card";
+
+        const titre = document.createElement("h3");
+        titre.textContent = activite.titre;
+
+        const details = document.createElement("p");
+        details.className = "small";
+
+        details.textContent =
+            "Maximum par groupe : " + activite.nombre_max +
+            " | Nombre de groupes : " + activite.nombre_max_groupes +
+            " | Étudiants : " + activite.nombre_etudiants;
+
+        const statut = document.createElement("span");
+        statut.className = "statut-activite";
+        statut.textContent = activite.statut;
+
+        const chrono = document.createElement("div");
+        chrono.className = "chrono";
+        chrono.dataset.dateFin = activite.date_fin;
+        chrono.dataset.statut = activite.statut;
+
+        const texte = document.createElement("span");
+        texte.textContent = "TEMPS RESTANT";
+
+        const temps = document.createElement("strong");
+        temps.textContent = "--:--:--";
+
+        chrono.appendChild(texte);
+        chrono.appendChild(temps);
+
+        const bouton = document.createElement("button");
+        bouton.textContent = "Voir les groupes";
+
+        bouton.addEventListener("click", function() {
+
+            chargerGroupes(
+                activite.id,
+                activite.nombre_max,
+                activite.titre
+            );
+
+        });
+
+        carte.appendChild(titre);
+        carte.appendChild(statut);
+        carte.appendChild(details);
+        carte.appendChild(chrono);
+        carte.appendChild(bouton);
+
+        conteneur.appendChild(carte);
+
+    });
+}
+
+
+// CHARGER LES GROUPES
+
+async function chargerGroupes(activiteId, nombreMax, titreActivite) {
+
+    // MEMORISER LES INFORMATIONS DE L'ACTIVITE
+
+    activiteActuelle.id = activiteId;
+    activiteActuelle.nombreMax = nombreMax;
+    activiteActuelle.titre = titreActivite;
+
+    const zone = document.getElementById("listeGroupesPage");
+
+    document.getElementById("titreActiviteGroupes").textContent =
+        titreActivite;
+
+    ouvrirPageGroupes();
+
+    zone.innerHTML = "<p>Chargement des groupes...</p>";
+
+
+    // RECUPERER LES GROUPES ET LEURS MEMBRES
+
+    const { data, error } = await client
+        .from("groupes")
+        .select(`
+            id,
+            nom,
+            statut,
+            membres_groupes (
+                etudiant_id,
+                etudiants (
+                    nom,
+                    matricule
+                )
+            )
+        `)
+        .eq("activite_id", activiteId)
+        .order("id", { ascending: true });
+
+    if (error) {
+        zone.textContent = "Erreur : " + error.message;
+        console.error(error);
+        return;
+    }
+
+
+    // RECUPERER L'UTILISATEUR CONNECTE
+
+    const { data: utilisateurConnecte, error: erreurUtilisateur } =
+        await client.auth.getUser();
+
+    if (erreurUtilisateur) {
+        zone.textContent =
+            "Impossible de vérifier l'utilisateur connecté.";
+
+        console.error(erreurUtilisateur);
+        return;
+    }
+
+    const utilisateurId = utilisateurConnecte.user
+        ? utilisateurConnecte.user.id
+        : null;
+
+
+    // VIDER LA ZONE
+
+    zone.innerHTML = "";
+
+    if (!data || data.length === 0) {
+        zone.textContent = "Aucun groupe disponible.";
+        return;
+    }
+
+
+    // AFFICHER CHAQUE GROUPE
+
+    for (const groupe of data) {
+
+        const membres = groupe.membres_groupes || [];
+
+        const nombreMembres = membres.length;
+        const places = nombreMax - nombreMembres;
+
+
+        // VERIFIER SI L'UTILISATEUR EST MEMBRE DU GROUPE
+
+        const estMembre = membres.some(function(membre) {
+
+            return membre.etudiant_id === utilisateurId;
+
+        });
+
+
+        // CREER LA CARTE DU GROUPE
+
+        const carte = document.createElement("div");
+        carte.className = "card";
+
+        const nom = document.createElement("h3");
+        nom.textContent = groupe.nom;
+
+        const compteur = document.createElement("p");
+        compteur.textContent =
+            "Membres : " + nombreMembres + " / " + nombreMax;
+
+        const disponibles = document.createElement("p");
+        disponibles.textContent =
+            "Places disponibles : " + Math.max(0, places);
+
+        const statut = document.createElement("p");
+        statut.textContent =
+            places <= 0
+                ? "Statut : COMPLET"
+                : "Statut : OUVERT";
+
+
+        // TITRE DES MEMBRES
+
+        const titreMembres = document.createElement("h4");
+        titreMembres.textContent = "Membres du groupe";
+
+        const liste = document.createElement("ul");
+
+
+        // AFFICHER LES MEMBRES
+
+        if (nombreMembres === 0) {
+
+            const vide = document.createElement("p");
+            vide.textContent = "Aucun membre pour le moment.";
+
+            carte.appendChild(vide);
+
+        } else {
+
+            membres.forEach(function(membre) {
+
+                const element = document.createElement("li");
+
+                let etudiant = membre.etudiants;
+
+                if (Array.isArray(etudiant)) {
+                    etudiant = etudiant[0];
+                }
+
+                if (etudiant) {
+
+                    element.textContent =
+                        etudiant.nom +
+                        " (" + etudiant.matricule + ")";
+
+                } else {
+
+                    element.textContent = "Étudiant inconnu";
+
+                }
+
+                liste.appendChild(element);
+
+            });
+
+        }
+
+
+        // AJOUTER LES INFORMATIONS DU GROUPE
+
+        carte.appendChild(nom);
+        carte.appendChild(compteur);
+        carte.appendChild(disponibles);
+        carte.appendChild(statut);
+        carte.appendChild(titreMembres);
+
+        if (nombreMembres > 0) {
+            carte.appendChild(liste);
+        }
+
+
+        // DEMANDES D'ADHESION
+        // SEULS LES MEMBRES DU GROUPE LES VOIENT
+
+        if (estMembre) {
+
+            const titreDemandes = document.createElement("h4");
+            titreDemandes.textContent = "Demandes d'adhésion";
+
+            const zoneDemandes = document.createElement("div");
+            zoneDemandes.className = "demandes-groupe";
+
+            carte.appendChild(titreDemandes);
+            carte.appendChild(zoneDemandes);
+
+            await chargerDemandes(
+                groupe.id,
+                zoneDemandes
+            );
+
+        }
+
+
+        // BOUTON REJOINDRE
+
+        const boutonRejoindre = document.createElement("button");
+
+        boutonRejoindre.textContent = "Rejoindre ce groupe";
+
+        boutonRejoindre.addEventListener("click", function() {
+
+            rejoindreGroupe(
+                groupe.id,
+                activiteId,
+                nombreMax,
+                titreActivite,
+                boutonRejoindre
+            );
+
+        });
+
+        carte.appendChild(boutonRejoindre);
+
+        zone.appendChild(carte);
+
+    }
+
+}
+
+
+// ACTUALISER LES CHRONOMETRES
+
+function actualiserChronos() {
+
+    const chronos = document.querySelectorAll(".chrono");
+
+    chronos.forEach(function(chrono) {
+
+        const dateFin = new Date(chrono.dataset.dateFin).getTime();
+        const statut = chrono.dataset.statut;
+
+        const affichage = chrono.querySelector("strong");
+        const texte = chrono.querySelector("span");
+
+
+        // ACTIVITE TERMINEE
+
+        if (statut !== "ouverte") {
+
+            affichage.textContent = "TERMINÉE";
+
+            chrono.classList.add("chrono-termine");
+
+            return;
+        }
+
+
+        // DATE INVALIDE
+
+        if (isNaN(dateFin)) {
+
+            affichage.textContent = "--:--:--";
+
+            return;
+        }
+
+
+        // CALCUL DU TEMPS RESTANT
+
+        const maintenant = Date.now();
+
+        const difference = dateFin - maintenant;
+
+
+        // TEMPS ECOULE
+
+        if (difference <= 0) {
+
+            affichage.textContent = "00:00:00";
+
+            chrono.classList.add("chrono-termine");
+
+            texte.textContent =
+                "TEMPS ÉCOULÉ — FINALISATION EN ATTENTE";
+
+            return;
+        }
+
+
+        // CONVERTIR EN HEURES, MINUTES ET SECONDES
+
+        const heures = Math.floor(difference / 3600000);
+
+        const minutes = Math.floor(
+            (difference % 3600000) / 60000
+        );
+
+        const secondes = Math.floor(
+            (difference % 60000) / 1000
+        );
+
+
+        // AFFICHER LE CHRONOMETRE
+
+        affichage.textContent =
+            String(heures).padStart(2, "0") + ":" +
+            String(minutes).padStart(2, "0") + ":" +
+            String(secondes).padStart(2, "0");
+
+    });
+
+}
+
+
+// CREER UNE ACTIVITE
+
+async function creerActivite() {
+
+    const titre =
+        document.getElementById("titreActivite").value.trim();
+
+    const nombreMax =
+        parseInt(document.getElementById("nombreMax").value);
+
+    const duree =
+        parseInt(document.getElementById("dureeActivite").value);
+
+    const message =
+        document.getElementById("messageActivite");
+
+    const bouton =
+        document.getElementById("boutonActivite");
+
+
+    message.textContent = "";
+
+
+    // VERIFIER LES CHAMPS
+
+    if (!titre || !nombreMax || !duree) {
+
+        message.textContent =
+            "Veuillez remplir tous les champs.";
+
+        return;
+    }
+
+
+    // VERIFIER LES VALEURS
+
+    if (nombreMax < 2 || duree < 1) {
+
+        message.textContent =
+            "Vérifiez le nombre d'étudiants et la durée.";
+
+        return;
+    }
+
+
+    // DESACTIVER LE BOUTON
+
+    bouton.disabled = true;
+
+    bouton.textContent = "Création en cours...";
+
+
+    try {
+
+        const { data, error } = await client.rpc(
+            "creer_activite",
+            {
+                p_titre: titre,
+                p_description: null,
+                p_nombre_max: nombreMax,
+                p_duree_minutes: duree
+            }
+        );
+
+        if (error) {
+            throw error;
+        }
+
+
+        // MESSAGE DE SUCCES
+
+        message.textContent =
+            "Activité créée avec succès !";
+
+
+        // VIDER LES CHAMPS
+
+        document.getElementById("titreActivite").value = "";
+
+        document.getElementById("nombreMax").value = "";
+
+        document.getElementById("dureeActivite").value = "";
+
+
+        // ACTUALISER LES ACTIVITES
+
+        await chargerActivites();
+
+    } catch (erreur) {
+
+        console.error(
+            "Erreur création activité :",
+            erreur
+        );
+
+        message.textContent =
+            erreur.message || "Une erreur est survenue.";
+
+    }
+
+
+    // REACTIVER LE BOUTON
+
+    bouton.disabled = false;
+
+    bouton.textContent = "Créer l'activité";
+
+}
+
+
+// NAVIGATION VERS LA PAGE DES GROUPES
+
+let espaceActuel = "etudiant";
+
+
+function ouvrirPageGroupes() {
+
+    const admin =
+        document.getElementById("espaceAdmin");
+
+    espaceActuel =
+        admin && getComputedStyle(admin).display !== "none"
+            ? "admin"
+            : "etudiant";
+
+
+    document.getElementById("connexion").style.display = "none";
+
+    document.getElementById("espaceAdmin").style.display = "none";
+
+    document.getElementById("espaceEtudiant").style.display = "none";
+
+    document.getElementById("pageGroupes").style.display = "block";
+
+}
+
+
+function retourActivites() {
+
+    document.getElementById("pageGroupes").style.display = "none";
+
+
+    if (espaceActuel === "admin") {
+
+        document.getElementById("espaceAdmin").style.display = "block";
+
+    } else {
+
+        document.getElementById("espaceEtudiant").style.display = "block";
+
+    }
+
+}
+
+
+// REJOINDRE UN GROUPE
+
+async function rejoindreGroupe(
+    groupeId,
+    activiteId,
+    nombreMax,
+    titreActivite,
+    bouton
+) {
+
+    bouton.disabled = true;
+
+    bouton.textContent = "Traitement...";
+
+
+    try {
+
+        const { data, error } = await client.rpc(
+            "rejoindre_groupe",
+            {
+                p_groupe_id: groupeId
+            }
+        );
+
+        if (error) {
+            throw error;
+        }
+
+
+        // RECUPERER LE RESULTAT
+
+        const resultat = Array.isArray(data)
+            ? data[0]
+            : data;
+
+
+        // AFFICHER LE MESSAGE
+
+        alert(
+            resultat.message ||
+            "Votre opération a été traitée."
+        );
+
+
+        // ACTUALISER LES GROUPES
+
+        await chargerGroupes(
+            activiteId,
+            nombreMax,
+            titreActivite
+        );
+
+    } catch (erreur) {
+
+        console.error("Erreur :", erreur);
+
+        alert(
+            erreur.message ||
+            "Une erreur est survenue."
+        );
+
+
+        // REACTIVER LE BOUTON
+
+        bouton.disabled = false;
+
+        bouton.textContent = "Rejoindre ce groupe";
+
+    }
+
+}
+
+
+// CHARGER LES DEMANDES D'ADHESION
+
+async function chargerDemandes(groupeId, conteneur) {
+
+    conteneur.innerHTML =
+        "<p>Chargement des demandes...</p>";
+
+
+    const { data, error } = await client
+        .from("demandes_adhesion")
+        .select(`
+            id,
+            etudiant_id,
+            statut,
+            created_at,
+            etudiants (
+                nom,
+                matricule
+            )
+        `)
+        .eq("groupe_id", groupeId)
+        .eq("statut", "en_attente")
+        .order("created_at", { ascending: true });
+
+
+    // ERREUR
+
+    if (error) {
+
+        conteneur.textContent =
+            "Erreur : " + error.message;
+
+        console.error(error);
+
+        return;
+    }
+
+
+    // VIDER LA ZONE
+
+    conteneur.innerHTML = "";
+
+
+    // AUCUNE DEMANDE
+
+    if (!data || data.length === 0) {
+
+        conteneur.textContent =
+            "Aucune demande en attente.";
+
+        return;
+    }
+
+
+    // AFFICHER CHAQUE DEMANDE
+
+    data.forEach(function(demande) {
+
+        const carte = document.createElement("div");
+
+        carte.className = "card";
+
+
+        // NOM DE L'ETUDIANT
+
+        const nom = document.createElement("p");
+
+        let etudiant = demande.etudiants;
+
+        if (Array.isArray(etudiant)) {
+            etudiant = etudiant[0];
+        }
+
+        nom.textContent = etudiant
+            ? etudiant.nom + " (" + etudiant.matricule + ")"
+            : "Étudiant inconnu";
+
+
+        // DATE DE LA DEMANDE
+
+        const date = document.createElement("p");
+
+        date.textContent =
+            "Demande envoyée le : " +
+            new Date(demande.created_at).toLocaleString("fr-FR");
+
+
+        carte.appendChild(nom);
+
+        carte.appendChild(date);
+
+
+        // BOUTON ACCEPTER
+
+        const boutonAccepter = document.createElement("button");
+
+        boutonAccepter.textContent = "Accepter";
+
+        boutonAccepter.addEventListener("click", function() {
+
+            traiterDemande(
+                demande.id,
+                "accepter",
+                boutonAccepter
+            );
+
+        });
+
+
+        // BOUTON REFUSER
+
+        const boutonRefuser = document.createElement("button");
+
+        boutonRefuser.textContent = "Refuser";
+
+        boutonRefuser.addEventListener("click", function() {
+
+            traiterDemande(
+                demande.id,
+                "refuser",
+                boutonRefuser
+            );
+
+        });
+
+
+        // AJOUTER LES BOUTONS
+
+        carte.appendChild(boutonAccepter);
+
+        carte.appendChild(boutonRefuser);
+
+
+        // AJOUTER LA DEMANDE
+
+        conteneur.appendChild(carte);
+
+    });
+
+}
+
+
+// ACCEPTER OU REFUSER UNE DEMANDE
+
+async function traiterDemande(
+    demandeId,
+    action,
+    bouton
+) {
+
+    bouton.disabled = true;
+
+    bouton.textContent = "Traitement...";
+
+
+    // CHOISIR LA FONCTION RPC
+
+    const nomFonction = action === "accepter"
+        ? "accepter_demande"
+        : "refuser_demande";
+
+
+    try {
+
+        const { data, error } = await client.rpc(
+            nomFonction,
+            {
+                p_demande_id: demandeId
+            }
+        );
+
+        if (error) {
+            throw error;
+        }
+
+
+        // RECUPERER LE RESULTAT
+
+        const resultat = Array.isArray(data)
+            ? data[0]
+            : data;
+
+
+        // AFFICHER LE MESSAGE
+
+        alert(
+            resultat.message ||
+            "Opération effectuée."
+        );
+
+
+        // RECHARGER AUTOMATIQUEMENT LES GROUPES
+
+        if (activiteActuelle.id !== null) {
+
+            await chargerGroupes(
+                activiteActuelle.id,
+                activiteActuelle.nombreMax,
+                activiteActuelle.titre
+            );
+
+        }
+
+    } catch (erreur) {
+
+        console.error("Erreur :", erreur);
+
+        alert(
+            erreur.message ||
+            "Une erreur est survenue."
+        );
+
+
+        // REACTIVER LE BOUTON
+
+        bouton.disabled = false;
+
+        bouton.textContent =
+            action === "accepter"
+                ? "Accepter"
+                : "Refuser";
+
+    }
+
+                      }
