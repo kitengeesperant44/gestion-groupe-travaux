@@ -1,385 +1,1349 @@
-<!DOCTYPE html>
-<html lang="fr">
-
-<head>
+<!DOCTYPE html><html lang="fr"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <meta name="theme-color" content="#102447">
-    <meta name="description" content="Plateforme de gestion des groupes de travaux des étudiants de L2 SIG.">
+    <meta name="description" content="Plateforme académique de gestion des étudiants, activités et ressources pédagogiques de L2 SIG."><title>Gestion L2 SIG</title>
 
-    <title>Gestion de groupe de travaux</title>
+<link rel="stylesheet" href="css/style.css">
 
-    <link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0"></script>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-</head>
+</head><body><!-- =====================================
+     EN-TÊTE PRINCIPAL
+===================================== --><header class="main-header"><div class="header-content">
 
-<body>
+    <div class="logo">
 
-    <!-- EN-TÊTE -->
-    <header class="main-header">
+        <div class="logo-icon">GT</div>
 
-        <div class="header-content">
+        <div class="logo-text">
+            <h2>Gestion L2 SIG</h2>
+            <p>Plateforme académique</p>
+        </div>
 
-            <div class="logo">
-                <div class="logo-icon">GT</div>
+    </div>
 
-                <div class="logo-text">
-                    <h2>Gestion de groupe de travaux</h2>
-                    <p>Plateforme académique · L2 SIG</p>
-                </div>
+</div>
+
+</header><main class="container"><!-- =====================================
+     PAGE DE CONNEXION
+===================================== --><section id="connexion" class="card login-card"><div class="login-brand">
+
+    <div class="logo-icon">GT</div>
+
+    <span class="badge">ESPACE ACADÉMIQUE</span>
+
+</div>
+
+<div class="login-heading">
+
+    <h3>Bienvenue sur Gestion L2 SIG</h3>
+
+    <p class="small">
+        Connectez-vous pour accéder à votre espace académique.
+    </p>
+
+</div>
+
+<form id="formConnexion" onsubmit="seConnecter(event)" novalidate>
+
+    <div class="form-group">
+
+        <label for="matricule">Matricule</label>
+
+        <input
+            type="text"
+            id="matricule"
+            placeholder="Entrez votre matricule"
+            autocomplete="username"
+        >
+
+    </div>
+
+    <div class="form-group">
+
+        <label for="password">Mot de passe</label>
+
+        <input
+            type="password"
+            id="password"
+            placeholder="Entrez votre mot de passe"
+            autocomplete="current-password"
+        >
+
+    </div>
+
+    <button id="boutonConnexion" type="submit">
+        Se connecter
+    </button>
+
+</form>
+
+<p class="message" id="messageConnexion" aria-live="polite"></p>
+
+<p class="login-footer">
+    Accès réservé aux étudiants et à l'administration.
+</p>
+
+</section><!-- =====================================
+     ESPACE ADMINISTRATEUR
+===================================== --><section id="espaceAdmin" class="espace"><!-- EN-TÊTE ADMIN -->
+
+<div class="dashboard-heading">
+
+    <div>
+
+        <span class="badge">ADMINISTRATION</span>
+
+        <h2>Tableau de bord</h2>
+
+        <p class="small">
+            Gérez votre classe et les ressources académiques.
+        </p>
+            <button
+    type="button"
+    class="notification-bell"
+    onclick="ouvrirNotifications()"
+    aria-label="Voir les notifications">
+
+    <span class="notification-icon">🔔</span>
+
+    <span
+        id="badgeNotificationsAdmin"
+        class="notification-badge"
+        style="display:none;">
+        0
+    </span>
+
+</button>
+
+        <p id="identiteAdmin"></p>
+
+    </div>
+
+    <button class="logout btn-deconnexion" onclick="deconnexion()">
+        Déconnexion
+    </button>
+
+</div>
+
+
+<!-- NAVIGATION ADMIN -->
+
+<nav class="dashboard-nav" aria-label="Navigation administrateur">
+
+    <button class="nav-item active"
+            onclick="naviguerPage('admin','tableau')">
+        <span class="nav-icon">⌂</span>
+        <span>Tableau de bord</span>
+    </button>
+
+
+    <button class="nav-item"
+            onclick="naviguerPage('admin','etudiants')">
+        <span class="nav-icon">♙</span>
+        <span>Étudiants</span>
+    </button>
+
+    <button class="nav-item"
+            onclick="naviguerPage('admin','activites')">
+        <span class="nav-icon">▤</span>
+        <span>Activités</span>
+    </button>
+
+    <button class="nav-item"
+            onclick="naviguerPage('admin','syllabus')">
+        <span class="nav-icon">▣</span>
+        <span>Syllabus</span>
+    </button>
+
+    <button class="nav-item"
+            onclick="naviguerPage('admin','archives')">
+        <span class="nav-icon">▥</span>
+        <span>Archives</span>
+    </button>
+
+    <button class="nav-item"
+            onclick="naviguerPage('admin','parametres')">
+        <span class="nav-icon">⚙</span>
+        <span>Paramètres</span>
+    </button>
+
+</nav>
+
+
+<!-- PAGE : TABLEAU DE BORD ADMIN -->
+
+<div id="adminPageTableau" class="page-interne active">
+
+    <div class="page-title">
+
+        <div>
+            <span class="page-eyebrow">VUE GÉNÉRALE</span>
+            <h2>Vue d'ensemble</h2>
+            <p class="small">
+                Les informations principales de votre classe.
+            </p>
+        </div>
+
+    </div>
+
+
+    <div class="stats-grid">
+
+        <div class="stat-card">
+
+            <div class="stat-icon">♙</div>
+
+            <p>Étudiants</p>
+
+            <strong id="statNombreEtudiants">--</strong>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <div class="stat-icon">▤</div>
+
+            <p>Activités</p>
+
+            <strong id="statNombreActivites">--</strong>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <div class="stat-icon">▣</div>
+
+            <p>Syllabus</p>
+
+            <strong id="statNombreSyllabus">--</strong>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <div class="stat-icon">▥</div>
+
+            <p>Archives</p>
+
+            <strong id="statNombreArchives">--</strong>
+
+        </div>
+
+    </div>
+
+
+    <div class="card welcome-card">
+
+        <span class="badge">ESPACE ADMINISTRATEUR</span>
+
+        <h3>Bienvenue dans votre espace de gestion.</h3>
+
+        <p class="small">
+            Depuis cette interface, vous pouvez gérer les étudiants,
+            organiser les activités de travaux pratiques et mettre
+            à disposition les ressources pédagogiques de L2 SIG.
+        </p>
+
+    </div>
+
+
+    <div class="card">
+
+        <div class="section-heading">
+
+            <div>
+                <h3>Activités récentes</h3>
+                <p class="small">
+                    Suivi des activités de la classe.
+                </p>
             </div>
 
         </div>
 
-    </header>
+        <div class="dashboard-shortcut">
 
-
-    <main class="container">
-
-        <!-- CONNEXION -->
-        <section class="card login-card" id="connexion">
-
-            <div class="login-heading">
-                <span class="badge">ESPACE ACADÉMIQUE</span>
-
-                <h3>Bienvenue !</h3>
-
-                <p class="small">
-                    Connectez-vous pour accéder à votre espace de travail.
-                </p>
-            </div>
-
-            <div class="form-group">
-                <label for="matricule">Matricule</label>
-
-                <input
-                    type="text"
-                    id="matricule"
-                    placeholder="Entrez votre matricule"
-                    autocomplete="username"
-                >
-            </div>
-
-            <div class="form-group">
-                <label for="password">Mot de passe</label>
-
-                <input
-                    type="password"
-                    id="password"
-                    placeholder="Entrez votre mot de passe"
-                    autocomplete="current-password"
-                >
-            </div>
-
-            <button id="boutonConnexion" onclick="seConnecter()">
-                Se connecter
-            </button>
-
-            <p class="message" id="messageConnexion"></p>
-
-            <p class="login-footer">
-                Accès réservé aux étudiants et à l'administration.
+            <p class="small">
+                Consultez les activités créées, suivez leur progression
+                et gérez les groupes de travaux.
             </p>
 
-        </section>
+            <button class="btn-secondary"
+                    onclick="naviguerPage('admin','activites')">
+                Voir toutes les activités →
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
 
 
-        <!-- ESPACE ADMINISTRATEUR -->
-        <section id="espaceAdmin" class="espace">
+<!-- PAGE : GESTION DES ETUDIANTS -->
 
-            <!-- IDENTITE ADMIN -->
-            <div class="dashboard-heading">
-                <span class="badge">ADMINISTRATEUR</span>
+<div id="adminPageEtudiants" class="page-interne">
 
-                <h2>Espace administration</h2>
+    <div class="page-title">
 
+        <div>
+            <span class="page-eyebrow">GESTION DE LA CLASSE</span>
+            <h2>Étudiants</h2>
+            <p class="small">
+                Consultez et gérez les comptes des étudiants.
+            </p>
+        </div>
+
+    </div>
+
+
+    <!-- LISTE DES ETUDIANTS -->
+
+    <div class="card">
+
+        <div class="section-heading">
+
+            <div>
+                <h3>Liste des étudiants</h3>
+                <p class="small">Tous les membres de L2 SIG.</p>
+            </div>
+
+        </div>
+
+        <p class="small" id="nombreAdmin"></p>
+
+        <div class="form-group">
+
+            <label for="rechercheEtudiant">
+                Rechercher un étudiant
+            </label>
+
+            <input
+                type="search"
+                id="rechercheEtudiant"
+                placeholder="Nom ou matricule..."
+                oninput="filtrerEtudiants()"
+            >
+
+        </div>
+
+        <div id="listeAdmin">
+            Chargement...
+        </div>
+
+        <button class="btn-secondary"
+                onclick="chargerEtudiants('listeAdmin','nombreAdmin')">
+            Actualiser la liste
+        </button>
+
+    </div>
+
+
+    <!-- CREATION COMPTE -->
+
+    <div class="card">
+
+        <div class="section-heading">
+
+            <div>
+                <h3>Créer un compte étudiant</h3>
                 <p class="small">
-                    Gérez les étudiants, les activités et les groupes de travaux.
+                    Ajouter un nouvel étudiant à la plateforme.
                 </p>
-
-                <p id="identiteAdmin"></p>
             </div>
 
+        </div>
 
-            <!-- ACTIVITES ADMIN : PREMIERE POSITION -->
-            <div class="card">
+        <label for="nouveauMatricule">Matricule</label>
 
-                <div class="section-heading">
-                    <span class="section-number">01</span>
+        <input
+            type="text"
+            id="nouveauMatricule"
+            placeholder="Ex : 7640"
+        >
 
-                    <div>
-                        <h3>Activités de la classe</h3>
-                        <p class="small">Suivez les activités et leurs groupes.</p>
-                    </div>
-                </div>
+        <label for="nouveauNom">Nom complet</label>
 
-                <div id="listeActivitesAdmin">
-                    Chargement des activités...
-                </div>
+        <input
+            type="text"
+            id="nouveauNom"
+            placeholder="Nom de l'étudiant"
+        >
 
-                <button onclick="chargerActivites()">
-                    Actualiser les activités
-                </button>
+        <label for="nouveauPassword">Mot de passe</label>
 
-            </div>
+        <input
+            type="password"
+            id="nouveauPassword"
+            placeholder="Minimum 8 caractères"
+            autocomplete="new-password"
+            minlength="8"
+        >
 
+        <button id="boutonCreation" onclick="creerEtudiant()">
+            Créer le compte
+        </button>
 
-            <!-- MEMBRES : DEUXIEME POSITION -->
-            <div class="card">
+        <p class="message" id="messageCreation" aria-live="polite"></p>
 
-                <div class="section-heading">
-                    <span class="section-number">02</span>
+    </div>
 
-                    <div>
-                        <h3>Liste des étudiants</h3>
-                        <p class="small">Consultez les membres de la classe.</p>
-                    </div>
-                </div>
-
-                <p class="small" id="nombreAdmin"></p>
-
-                <div id="listeAdmin">
-                    Chargement...
-                </div>
-
-                <button onclick="chargerEtudiants('listeAdmin', 'nombreAdmin')">
-                    Actualiser la liste
-                </button>
-
-            </div>
+</div>
 
 
-            <!-- CREER ETUDIANT -->
-            <div class="card">
+<!-- PAGE : ACTIVITES ADMIN -->
 
-                <div class="section-heading">
-                    <span class="section-number">03</span>
+<div id="adminPageActivites" class="page-interne">
 
-                    <div>
-                        <h3>Créer un étudiant</h3>
-                        <p class="small">Ajouter un nouveau compte étudiant.</p>
-                    </div>
-                </div>
+    <div class="page-title">
 
-                <label for="nouveauMatricule">Matricule</label>
+        <div>
+            <span class="page-eyebrow">TRAVAUX ACADÉMIQUES</span>
+            <h2>Gestion des activités</h2>
+            <p class="small">
+                Créez et suivez les travaux en groupe.
+            </p>
+        </div>
 
-                <input
-                    type="text"
-                    id="nouveauMatricule"
-                    placeholder="Ex : 7640"
-                >
-
-                <label for="nouveauNom">Nom complet</label>
-
-                <input
-                    type="text"
-                    id="nouveauNom"
-                    placeholder="Nom de l'étudiant"
-                >
-
-                <label for="nouveauPassword">Mot de passe</label>
-
-                <input
-                    type="password"
-                    id="nouveauPassword"
-                    placeholder="Minimum 8 caractères"
-                >
-
-                <button id="boutonCreation" onclick="creerEtudiant()">
-                    Créer le compte
-                </button>
-
-                <p class="message" id="messageCreation"></p>
-
-            </div>
+    </div>
 
 
-            <!-- CREATION ACTIVITE -->
-            <div class="card">
+    <!-- CREATION ACTIVITE -->
 
-                <div class="section-heading">
-                    <span class="section-number">04</span>
+    <div class="card">
 
-                    <div>
-                        <h3>Créer une activité</h3>
-                        <p class="small">Organisez un nouveau travail en groupe.</p>
-                    </div>
-                </div>
+        <div class="section-heading">
 
-                <label for="titreActivite">Nom de l'activité</label>
-
-                <input
-                    type="text"
-                    id="titreActivite"
-                    placeholder="Ex : TP de programmation"
-                >
-
-                <label for="nombreMax">
-                    Nombre maximum d'étudiants par groupe
-                </label>
-
-                <input
-                    type="number"
-                    id="nombreMax"
-                    placeholder="Ex : 5"
-                    min="2"
-                >
-
-                <label for="dureeActivite">Durée (en minutes)</label>
-
-                <input
-                    type="number"
-                    id="dureeActivite"
-                    placeholder="Ex : 60"
-                    min="1"
-                >
-
-                <button id="boutonActivite" onclick="creerActivite()">
-                    Créer l'activité
-                </button>
-
-                <p class="message" id="messageActivite"></p>
-
-            </div>
-
-
-            <!-- GROUPES ADMIN -->
-            <div id="groupesAdmin"></div>
-
-
-            <!-- DECONNEXION : DERNIERE POSITION -->
-            <div class="card">
-                <button class="logout" onclick="deconnexion()">
-                    Déconnexion
-                </button>
-            </div>
-
-        </section>
-
-
-        <!-- PAGE DES GROUPES -->
-        <section id="pageGroupes" class="espace" style="display: none;">
-
-            <div class="card">
-
-                <button class="btn-retour" onclick="retourActivites()">
-                    ← Retour aux activités
-                </button>
-
-                <h2 id="titreActiviteGroupes">
-                    Groupes de l'activité
-                </h2>
-
-                <div id="listeGroupesPage">
-                    Chargement des groupes...
-                </div>
-
-            </div>
-
-        </section>
-
-
-        <!-- ESPACE ETUDIANT -->
-        <section id="espaceEtudiant" class="espace">
-
-            <!-- IDENTITE ETUDIANT -->
-            <div class="dashboard-heading">
-
-                <span class="badge">ESPACE ÉTUDIANT</span>
-
-                <h2>Mon espace de travail</h2>
-
+            <div>
+                <h3>Créer une activité</h3>
                 <p class="small">
-                    Retrouvez vos camarades, vos activités et vos groupes.
+                    Organisez un nouveau travail en groupe.
                 </p>
-
-                <p id="identiteEtudiant"></p>
-
             </div>
 
+        </div>
 
-            <!-- ACTIVITES ETUDIANT : PREMIERE POSITION -->
-            <div class="card">
+        <label for="titreActivite">Nom de l'activité</label>
 
-                <div class="section-heading">
-                    <span class="section-number">01</span>
+        <input
+            type="text"
+            id="titreActivite"
+            placeholder="Ex : TP de programmation"
+        >
 
-                    <div>
-                        <h3>Activités disponibles</h3>
-                        <p class="small">Participez aux travaux de la classe.</p>
-                    </div>
-                </div>
+        <label for="nombreMax">
+            Nombre maximum d'étudiants par groupe
+        </label>
 
-                <div id="listeActivitesEtudiant">
-                    Chargement des activités...
-                </div>
+        <input
+            type="number"
+            id="nombreMax"
+            placeholder="Ex : 5"
+            min="2"
+        >
 
-                <button onclick="chargerActivites()">
-                    Actualiser les activités
-                </button>
+        <label for="dureeActivite">Durée (en minutes)</label>
 
+        <input
+            type="number"
+            id="dureeActivite"
+            placeholder="Ex : 60"
+            min="1"
+        >
+
+
+        <!-- EXCLUSIONS -->
+
+        <div class="form-group">
+
+            <h3>Étudiants à exclure</h3>
+
+            <p class="small">
+                Les étudiants sélectionnés ne participeront pas
+                à cette activité et ne seront pas comptabilisés
+                dans le calcul des groupes.
+            </p>
+
+            <button
+                type="button"
+                class="btn-secondary"
+                onclick="chargerEtudiantsPourExclusion()"
+            >
+                Actualiser la liste des étudiants
+            </button>
+
+            <p class="small" id="nombreEtudiantsExclus">
+                Aucun étudiant sélectionné.
+            </p>
+
+            <div id="listeEtudiantsExclusion">
+                Chargement de la liste des étudiants...
             </div>
 
+        </div>
 
-            <!-- MEMBRES : DEUXIEME POSITION -->
-            <div class="card">
 
-                <div class="section-heading">
-                    <span class="section-number">02</span>
+        <button id="boutonActivite" onclick="creerActivite()">
+            Créer l'activité
+        </button>
 
-                    <div>
-                        <h3>Liste des étudiants de L2 SIG</h3>
-                        <p class="small">Découvrez les membres de votre classe.</p>
-                    </div>
-                </div>
+        <p class="message" id="messageActivite" aria-live="polite"></p>
 
-                <p class="small" id="nombreEtudiant"></p>
+    </div>
 
-                <div id="listeEtudiant">
-                    Chargement...
-                </div>
 
-                <button onclick="chargerEtudiants('listeEtudiant', 'nombreEtudiant')">
-                    Actualiser la liste
-                </button>
+    <!-- LISTE DES ACTIVITES -->
 
+    <div class="card">
+
+        <div class="section-heading">
+
+            <div>
+                <h3>Activités de la classe</h3>
+                <p class="small">
+                    Consultez les activités et leurs groupes.
+                </p>
             </div>
 
+        </div>
 
-            <!-- GROUPES ETUDIANT -->
-            <div id="groupesEtudiant"></div>
+        <div id="listeActivitesAdmin">
+            Chargement des activités...
+        </div>
+
+        <button class="btn-secondary"
+                onclick="chargerActivites()">
+            Actualiser les activités
+        </button>
+
+    </div>
+
+</div>
 
 
-            <!-- DECONNEXION : DERNIERE POSITION -->
-            <div class="card">
-                <button class="logout" onclick="deconnexion()">
-                    Déconnexion
-                </button>
+<!-- PAGE : SYLLABUS ADMIN -->
+
+<div id="adminPageSyllabus" class="page-interne">
+
+    <div class="page-header">
+        <div>
+            <h2>Gestion des syllabus</h2>
+            <p>Publiez et gérez les supports de cours.</p>
+        </div>
+    </div>
+
+    <!-- FORMULAIRE DE PUBLICATION -->
+
+    <div class="section-card">
+
+        <h3>Publier un nouveau syllabus</h3>
+
+        <form id="formulaireSyllabus" onsubmit="publierSyllabus(event)">
+
+            <div class="form-group">
+                <label for="titreSyllabus">Titre du document</label>
+                <input
+                    type="text"
+                    id="titreSyllabus"
+                    placeholder="Exemple : Introduction aux SIG"
+                    required
+                >
             </div>
 
-        </section>
+            <div class="form-group">
+                <label for="descriptionSyllabus">Description</label>
+                <textarea
+                    id="descriptionSyllabus"
+                    placeholder="Décrivez brièvement le contenu du cours..."
+                    rows="3"
+                ></textarea>
+            </div>
 
-    </main>
+            <div class="form-group">
+                <label for="fichierSyllabus">Choisir le fichier</label>
+                <input
+                    type="file"
+                    id="fichierSyllabus"
+                    accept=".pdf,.doc,.docx,.ppt,.pptx"
+                    required
+                >
+                <small>PDF, Word ou PowerPoint — maximum 20 Mo.</small>
+            </div>
+
+            <button type="submit" id="boutonSyllabus" class="btn-primary">
+                Publier le syllabus
+            </button>
+
+            <div id="messageSyllabus" class="message"></div>
+
+        </form>
+
+    </div>
 
 
-    <!-- PIED DE PAGE -->
-    <footer class="main-footer">
+    <!-- DOCUMENTS PUBLIES -->
 
-        <p>Gestion de groupe de travaux</p>
+    <div class="section-card">
 
-        <span>Plateforme académique · L2 SIG</span>
+        <h3>Documents publiés</h3>
 
-    </footer>
+        <div id="listeSyllabusAdmin">
+            <p class="empty-state">Chargement des documents...</p>
+        </div>
+
+    </div>
+
+</div>
+
+<!-- PAGE : ARCHIVES ADMIN -->
+
+<div id="adminPageArchives" class="page-interne"><div class="page-header">
+    <div>
+        <h2>Gestion des archives</h2>
+        <p>Publiez et gérez les anciens documents universitaires.</p>
+    </div>
+</div>
+
+<!-- FORMULAIRE DE PUBLICATION -->
+
+<div class="section-card">
+
+    <h3>Publier un document</h3>
+
+    <form id="formulaireArchives" onsubmit="publierArchive(event)">
+
+        <div class="form-group">
+
+            <label for="titreArchive">
+                Titre du document
+            </label>
+
+            <input
+                type="text"
+                id="titreArchive"
+                placeholder="Exemple : Examen de cartographie"
+                required
+            >
+
+        </div>
 
 
-    <!-- JAVASCRIPT -->
-    <script src="js/supabase.js"></script>
-    <script src="js/connexion.js"></script>
-    <script src="js/etudiants.js"></script>
-    <script src="js/activites.js"></script>
-    <script src="js/app.js"></script>
+        <div class="form-group">
 
-</body>
+            <label for="coursArchive">
+                Cours concerné
+            </label>
+
+            <input
+                type="text"
+                id="coursArchive"
+                placeholder="Exemple : Cartographie"
+                required
+            >
+
+        </div>
+
+
+        <div class="form-group">
+
+            <label for="typeArchive">
+                Type de document
+            </label>
+
+            <select id="typeArchive" required>
+
+                <option value="">Choisir le type</option>
+
+                <option value="Examen">
+                    Examen
+                </option>
+
+                <option value="Interrogation">
+                    Interrogation
+                </option>
+
+                <option value="TP">
+                    Travaux pratiques (TP)
+                </option>
+
+                <option value="TD">
+                    Travaux dirigés (TD)
+                </option>
+
+                <option value="Examen de récupération">
+                    Examen de récupération
+                </option>
+
+            </select>
+
+        </div>
+
+
+        <div class="form-group">
+
+            <label for="anneeArchive">
+                Année académique
+            </label>
+
+            <input
+                type="text"
+                id="anneeArchive"
+                placeholder="Exemple : 2025-2026"
+                pattern="[0-9]{4}-[0-9]{4}"
+                title="Format attendu : 2025-2026"
+                required
+            >
+
+        </div>
+
+
+        <div class="form-group">
+
+            <label for="descriptionArchive">
+                Description
+            </label>
+
+            <textarea
+                id="descriptionArchive"
+                placeholder="Informations complémentaires..."
+                rows="3"
+            ></textarea>
+
+        </div>
+
+
+        <div class="form-group">
+
+            <label for="fichierArchive">
+                Fichier du document
+            </label>
+
+            <input
+                type="file"
+                id="fichierArchive"
+                accept=".pdf,.doc,.docx,.ppt,.pptx"
+                required
+            >
+
+            <small>
+                PDF, Word ou PowerPoint — maximum 20 Mo.
+            </small>
+
+        </div>
+
+
+        <button
+            type="submit"
+            id="boutonArchive"
+            class="btn-primary"
+        >
+            Publier le document
+        </button>
+
+
+        <div
+            id="messageArchive"
+            class="message"
+></div>
+
+    </form>
+
+</div>
+
+
+<!-- LISTE DES DOCUMENTS -->
+
+<div class="section-card">
+
+    <h3>Documents publiés</h3>
+
+    <div id="listeArchivesAdmin">
+
+        <p class="empty-state">
+            Chargement des archives...
+        </p>
+
+    </div>
+
+</div>
+
+</div>
+
+<!-- PAGE : PARAMETRES ADMIN -->
+
+<div id="adminPageParametres" class="page-interne">
+
+    <div class="page-title">
+
+        <div>
+            <span class="page-eyebrow">CONFIGURATION</span>
+            <h2>Paramètres</h2>
+            <p class="small">
+                Informations et gestion de la plateforme.
+            </p>
+        </div>
+
+    </div>
+
+    <div class="card">
+
+        <h3>Informations de la plateforme</h3>
+
+        <p class="small">
+            Nom : Gestion L2 SIG
+        </p>
+
+        <p class="small">
+            Faculté : Sciences de l'Information et de Gestion
+        </p>
+
+        <p class="small">
+            Niveau : Licence 2
+        </p>
+
+        <p class="small">
+            Établissement : Université Shalom de Bunia
+        </p>
+
+    </div>
+
+
+    <div class="card">
+
+        <h3>Session administrateur</h3>
+
+        <button class="logout" onclick="deconnexion()">
+            Déconnexion
+        </button>
+
+    </div>
+
+</div>
+
+</section><!-- =====================================
+     PAGE DES GROUPES
+===================================== --><section id="pageGroupes" class="espace"><div class="card">
+
+    <button class="btn-retour" onclick="retourActivites()">
+        ← Retour aux activités
+    </button>
+
+    <div class="page-title">
+
+        <div>
+            <span class="page-eyebrow">TRAVAUX ACADÉMIQUES</span>
+
+            <h2 id="titreActiviteGroupes">
+                Groupes de l'activité
+            </h2>
+
+        </div>
+
+    </div>
+
+    <div id="listeGroupesPage">
+        Chargement des groupes...
+    </div>
+
+</div>
+
+</section><!-- =====================================
+     ESPACE ETUDIANT
+===================================== --><section id="espaceEtudiant" class="espace"><!-- EN-TÊTE ETUDIANT -->
+
+<div class="dashboard-heading">
+<button
+    type="button"
+    class="notification-bell"
+    onclick="ouvrirNotifications()"
+    aria-label="Voir les notifications">
+
+    <span class="notification-icon">🔔</span>
+
+    <span
+        id="badgeNotificationsEtudiant"
+        class="notification-badge"
+        style="display:none;">
+        0
+    </span>
+
+</button>
+
+    <div>
+
+        <span class="badge">ESPACE ÉTUDIANT</span>
+
+        <h2>Mon espace académique</h2>
+
+        <p class="small">
+            Retrouvez vos activités, vos groupes et vos ressources pédagogiques.
+        </p>
+
+        <p id="identiteEtudiant"></p>
+
+    </div>
+
+    <button class="logout btn-deconnexion" onclick="deconnexion()">
+        Déconnexion
+    </button>
+
+</div>
+
+
+<!-- NAVIGATION ETUDIANT -->
+
+<nav class="dashboard-nav" aria-label="Navigation étudiant">
+
+    <button class="nav-item active"
+            onclick="naviguerPage('etudiant','tableau')">
+        <span class="nav-icon">⌂</span>
+        <span>Accueil</span>
+    </button>
+
+    <button class="nav-item"
+            onclick="naviguerPage('etudiant','activites')">
+        <span class="nav-icon">▤</span>
+        <span>Activités</span>
+    </button>
+
+    <button class="nav-item"
+            onclick="naviguerPage('etudiant','groupes')">
+        <span class="nav-icon">♧</span>
+        <span>Groupes</span>
+    </button>
+
+    <button class="nav-item"
+            onclick="naviguerPage('etudiant','syllabus')">
+        <span class="nav-icon">▣</span>
+        <span>Syllabus</span>
+    </button>
+
+    <button class="nav-item"
+            onclick="naviguerPage('etudiant','archives')">
+        <span class="nav-icon">▥</span>
+        <span>Archives</span>
+    </button>
+
+    <button class="nav-item"
+            onclick="naviguerPage('etudiant','profil')">
+        <span class="nav-icon">♙</span>
+        <span>Profil</span>
+    </button>
+
+</nav>
+
+
+<!-- PAGE : TABLEAU DE BORD ETUDIANT -->
+
+<div id="etudiantPageTableau" class="page-interne active">
+
+    <div class="page-title">
+
+        <div>
+            <span class="page-eyebrow">VOTRE ESPACE</span>
+            <h2>Tableau de bord</h2>
+            <p class="small">
+                Retrouvez rapidement les informations de votre classe.
+            </p>
+        </div>
+
+    </div>
+
+
+    <div class="stats-grid">
+
+        <div class="stat-card">
+
+            <div class="stat-icon">▤</div>
+
+            <p>Activités</p>
+
+            <strong id="statEtudiantActivites">--</strong>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <div class="stat-icon">♧</div>
+
+            <p>Mes groupes</p>
+
+            <strong id="statEtudiantGroupes">--</strong>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <div class="stat-icon">▣</div>
+
+            <p>Syllabus</p>
+
+            <strong id="statEtudiantSyllabus">--</strong>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <div class="stat-icon">▥</div>
+
+            <p>Archives</p>
+
+            <strong id="statEtudiantArchives">--</strong>
+
+        </div>
+
+    </div>
+
+
+    <div class="card welcome-card">
+
+        <span class="badge">BIENVENUE</span>
+
+        <h3>Bienvenue dans votre espace de travail.</h3>
+
+        <p class="small">
+            Vous pouvez participer aux activités de groupe,
+            consulter les syllabus de vos cours et accéder
+            aux anciennes épreuves disponibles.
+        </p>
+
+    </div>
+
+
+    <div class="card">
+
+        <div class="section-heading">
+
+            <div>
+                <h3>Activités disponibles</h3>
+                <p class="small">
+                    Retrouvez les travaux proposés par l'administration.
+                </p>
+            </div>
+
+        </div>
+
+        <div class="dashboard-shortcut">
+
+            <p class="small">
+                Découvrez les travaux proposés par l'administration
+                et participez aux activités de votre classe.
+            </p>
+
+            <button class="btn-secondary"
+                    onclick="naviguerPage('etudiant','activites')">
+                Consulter les activités →
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- PAGE : ACTIVITES ETUDIANT -->
+
+<div id="etudiantPageActivites" class="page-interne">
+
+    <div class="page-title">
+
+        <div>
+            <span class="page-eyebrow">TRAVAUX ACADÉMIQUES</span>
+            <h2>Mes activités</h2>
+            <p class="small">
+                Consultez les activités et participez aux travaux.
+            </p>
+        </div>
+
+    </div>
+
+    <div class="card">
+
+        <div id="listeActivitesEtudiant">
+            Chargement des activités...
+        </div>
+
+        <button class="btn-secondary"
+                onclick="chargerActivites()">
+            Actualiser les activités
+        </button>
+
+    </div>
+
+</div>
+
+
+<!-- PAGE : GROUPES ETUDIANT -->
+
+<div id="etudiantPageGroupes" class="page-interne">
+
+    <div class="page-title">
+
+        <div>
+            <span class="page-eyebrow">COLLABORATION</span>
+            <h2>Mes groupes</h2>
+            <p class="small">
+                Retrouvez les groupes auxquels vous participez.
+            </p>
+        </div>
+
+    </div>
+
+    <div class="card">
+
+        <p class="small">
+            Pour consulter les membres et les demandes d'adhésion,
+            ouvrez une activité puis sélectionnez ses groupes.
+        </p>
+
+        <button onclick="naviguerPage('etudiant','activites')">
+            Consulter les activités
+        </button>
+
+    </div>
+
+</div>
+
+
+<!-- PAGE : SYLLABUS ETUDIANT -->
+
+
+<div id="etudiantPageSyllabus" class="page-interne">
+
+    <div class="page-header">
+        <div>
+            <h2>Bibliothèque des syllabus</h2>
+            <p>Retrouvez les supports de vos cours.</p>
+        </div>
+    </div>
+
+    <!-- RECHERCHE -->
+
+    <div class="section-card">
+
+        <div class="form-group">
+
+            <label for="rechercheSyllabus">
+                Rechercher un cours
+            </label>
+
+            <input
+                type="search"
+                id="rechercheSyllabus"
+                placeholder="Saisissez le nom d'un cours..."
+                oninput="filtrerSyllabus()"
+            >
+
+        </div>
+
+    </div>
+
+
+    <!-- LISTE DES DOCUMENTS -->
+
+    <div class="section-card">
+
+        <h3>Supports disponibles</h3>
+
+        <div id="listeSyllabusEtudiant">
+            <p class="empty-state">Chargement des syllabus...</p>
+        </div>
+
+    </div>
+
+</div>
+<!-- PAGE : ARCHIVES ETUDIANT -->
+
+<div id="etudiantPageArchives" class="page-interne"><div class="page-header">
+
+    <div>
+
+        <h2>Archives universitaires</h2>
+
+        <p>
+            Retrouvez les anciens examens, interrogations,
+            TP et TD.
+        </p>
+
+    </div>
+
+</div>
+
+
+<!-- RECHERCHE -->
+
+<div class="section-card">
+
+    <h3>Rechercher un document</h3>
+
+
+    <div class="form-group">
+
+        <label for="rechercheArchives">
+            Recherche par titre ou cours
+        </label>
+
+        <input
+            type="search"
+            id="rechercheArchives"
+            placeholder="Exemple : cartographie..."
+            oninput="filtrerArchives()"
+        >
+
+    </div>
+
+
+    <div class="form-group">
+
+        <label for="filtreTypeArchive">
+            Type de document
+        </label>
+
+        <select
+            id="filtreTypeArchive"
+            onchange="filtrerArchives()"
+        >
+
+            <option value="">
+                Tous les types
+            </option>
+
+            <option value="Examen">
+                Examen
+            </option>
+
+            <option value="Interrogation">
+                Interrogation
+            </option>
+
+            <option value="TP">
+                Travaux pratiques (TP)
+            </option>
+
+            <option value="TD">
+                Travaux dirigés (TD)
+            </option>
+
+            <option value="Examen de récupération">
+                Examen de récupération
+            </option>
+
+        </select>
+
+    </div>
+
+
+    <div class="form-group">
+
+        <label for="filtreAnneeArchive">
+            Année académique
+        </label>
+
+        <select
+            id="filtreAnneeArchive"
+            onchange="filtrerArchives()"
+        >
+
+            <option value="">
+                Toutes les années
+            </option>
+
+        </select>
+
+    </div>
+
+</div>
+
+
+<!-- LISTE DES ARCHIVES -->
+
+<div class="section-card">
+
+    <h3>Documents disponibles</h3>
+
+    <div id="listeArchivesEtudiant">
+
+        <p class="empty-state">
+            Chargement des archives...
+        </p>
+
+    </div>
+
+</div>
+
+</div>
+
+<!-- PAGE : PROFIL ETUDIANT -->
+
+<div id="etudiantPageProfil" class="page-interne">
+
+    <div class="page-title">
+
+        <div>
+            <span class="page-eyebrow">MON COMPTE</span>
+            <h2>Mon profil</h2>
+            <p class="small">
+                Informations relatives à votre compte étudiant.
+            </p>
+        </div>
+
+    </div>
+
+    <div class="card">
+
+        <div class="profile-avatar">♙</div>
+
+        <h3 id="profilNomEtudiant">Étudiant</h3>
+
+        <p class="small" id="profilMatriculeEtudiant">
+            Matricule
+        </p>
+
+        <p class="small">
+            Licence 2 · Sciences de l'Information et de Gestion
+        </p>
+
+    </div>
+
+
+    <div class="card">
+
+        <h3>Sécurité du compte</h3>
+
+        <p class="small">
+            Pensez à conserver votre mot de passe confidentiel.
+        </p>
+
+        <button class="logout" onclick="deconnexion()">
+            Déconnexion
+        </button>
+
+    </div>
+
+</div>
+
+</section></main><!-- =====================================
+     PIED DE PAGE
+===================================== --><footer class="main-footer"><p>Gestion L2 SIG</p>
+
+<span>
+    Plateforme académique · Université Shalom de Bunia
+</span>
+
+<span class="footer-copyright">
+    © 2026 · Tous droits réservés
+</span>
+
+</footer><!-- =====================================
+     JAVASCRIPT
+.===================================== --><script src="js/supabase.js"></script><script src="js/connexion.js"></script><script src="js/etudiants.js"></script><script src="js/activites.js"></script>
+<script src="js/syllabus.js"></script><script src="js/archives.js"></script><script src="js/notifications.js"></script><script src="js/app.js"></script></body>
 </html>
