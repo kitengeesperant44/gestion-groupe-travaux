@@ -1745,3 +1745,28 @@ outline-offset: 3px;
         opacity: 1;
     }
 }
+/* NAVIGATION MOBILE : AFFICHER TOUTES LES OPTIONS */
+
+@media (max-width: 700px) {
+
+    .dashboard-nav {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        width: 100%;
+        overflow: visible;
+        box-sizing: border-box;
+    }
+
+    .dashboard-nav .nav-item {
+        min-width: 0;
+        width: 100%;
+        flex: initial;
+        white-space: normal;
+        justify-content: center;
+        text-align: center;
+        min-height: 55px;
+        box-sizing: border-box;
+    }
+
+}
