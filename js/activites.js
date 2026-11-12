@@ -2,889 +2,1034 @@
 
 let intervalleChrono = null;
 
+let activiteActuelle = { id: null, nombreMax: null, titre: null };
 
-// MEMORISER L'ACTIVITE ACTUELLEMENT OUVERTE
+// OUTIL : CREER UN ELEMENT
 
-let activiteActuelle = {
-    id: null,
-    nombreMax: null,
-    titre: null
-};
+function el(balise, classe, texte) {
+const element = document.createElement(balise);
 
+if (classe) element.className = classe;
+if (texte !== undefined && texte !== null) {
+    element.textContent = texte;
+}
 
-// CHARGER LES ACTIVITES
+return element;
 
-async function chargerActivites() {
+}
 
-    const admin = document.getElementById("listeActivitesAdmin");
-    const etudiant = document.getElementById("listeActivitesEtudiant");
+// CHARGER LES ETUDIANTS POUR LES EXCLUSIONS
+
+async function chargerEtudiantsPourExclusion() {
+
+if (!profil || profil.role !== "admin") return;
+
+const conteneur = document.getElementById("listeEtudiantsExclusion");
+const compteur = document.getElementById("nombreEtudiantsExclus");
+
+if (!conteneur) return;
+
+conteneur.textContent = "Chargement des étudiants...";
+
+try {
 
     const { data, error } = await client
-        .from("activites")
-        .select(`
-            id,
-            titre,
-            nombre_max,
-            duree_minutes,
-            date_debut,
-            date_fin,
-            statut,
-            nombre_etudiants,
-            nombre_max_groupes
-        `)
-        .order("date_debut", { ascending: false });
+        .from("etudiants")
+        .select("auth_id, nom, matricule")
+        .eq("role", "etudiant")
+        .not("auth_id", "is", null)
+        .order("nom", { ascending: true });
 
-    if (error) {
-        if (admin) admin.textContent = "Erreur : " + error.message;
-        if (etudiant) etudiant.textContent = "Erreur : " + error.message;
+    if (error) throw error;
+
+    if (!profil || profil.role !== "admin") return;
+
+    conteneur.innerHTML = "";
+
+    if (!data || data.length === 0) {
+        conteneur.textContent = "Aucun étudiant disponible.";
         return;
     }
 
-    afficherActivites(data, admin);
-    afficherActivites(data, etudiant);
+    data.forEach(function(etudiant) {
 
-    if (intervalleChrono !== null) {
-        clearInterval(intervalleChrono);
+        const ligne = el("label", "ligne-exclusion");
+
+        const checkbox = el("input");
+        checkbox.type = "checkbox";
+        checkbox.name = "etudiantsExclus";
+        checkbox.value = etudiant.auth_id;
+
+        checkbox.addEventListener("change", actualiserNombreExclus);
+
+        const texte = el(
+            "span",
+            null,
+            etudiant.nom + " (" + etudiant.matricule + ")"
+        );
+
+        ligne.appendChild(checkbox);
+        ligne.appendChild(texte);
+
+        conteneur.appendChild(ligne);
+
+    });
+
+    conteneur.dataset.chargee = "oui";
+
+    if (compteur) {
+        compteur.textContent = "Aucun étudiant sélectionné.";
     }
 
-    actualiserChronos();
+} catch (erreur) {
 
-    intervalleChrono = setInterval(actualiserChronos, 1000);
+    console.error("Erreur chargement exclusions :", erreur);
+
+    conteneur.textContent =
+        "Impossible de charger les étudiants. Réessayez.";
+
 }
 
+}
+
+// ACTUALISER LE NOMBRE D'ETUDIANTS EXCLUS
+
+function actualiserNombreExclus() {
+
+const compteur = document.getElementById("nombreEtudiantsExclus");
+
+if (!compteur) return;
+
+const cases = document.querySelectorAll(
+    'input[name="etudiantsExclus"]:checked'
+);
+
+const nombre = cases.length;
+
+compteur.textContent = nombre === 0
+    ? "Aucun étudiant sélectionné."
+    : nombre + " étudiant(s) sélectionné(s).";
+
+}
+
+// RECUPERER LES UUID DES ETUDIANTS EXCLUS
+
+function recupererEtudiantsExclus() {
+
+const cases = document.querySelectorAll(
+    'input[name="etudiantsExclus"]:checked'
+);
+
+return Array.from(cases).map(function(checkbox) {
+    return checkbox.value;
+});
+
+}
+
+// VIDER LA SELECTION DES EXCLUSIONS
+
+function viderSelectionExclusions() {
+
+document.querySelectorAll(
+    'input[name="etudiantsExclus"]'
+).forEach(function(checkbox) {
+    checkbox.checked = false;
+});
+
+actualiserNombreExclus();
+
+}
+
+// CHARGER LES ACTIVITES
+async function chargerActivites() {
+
+    if (!profil) return;
+
+    let etape = "Initialisation";
+
+    const conteneur = document.getElementById(
+        profil.role === "admin"
+            ? "listeActivitesAdmin"
+            : "listeActivitesEtudiant"
+    );
+
+    if (!conteneur) return;
+
+    try {
+
+        // 1. CHARGEMENT DES ACTIVITES
+
+        etape = "Lecture des activités dans Supabase";
+
+        const { data, error } = await client
+            .from("activites")
+            .select("id, titre, nombre_max, duree_minutes, date_debut, date_fin, statut, nombre_etudiants, nombre_max_groupes")
+            .order("date_debut", { ascending: false });
+
+        if (!profil) return;
+
+        if (error) {
+            console.error("Erreur Supabase activités :", error);
+            conteneur.textContent =
+                "Impossible de charger les activités. Réessayez.";
+            return;
+        }
+
+        // 2. AFFICHAGE DES ACTIVITES
+
+        etape = "Affichage des activités";
+
+        afficherActivites(data || [], conteneur);
+
+        if (!profil) return;
+
+        // 3. CHARGEMENT DES ETUDIANTS POUR LES EXCLUSIONS
+
+        if (profil.role === "admin") {
+
+            const listeExclusion = document.getElementById(
+                "listeEtudiantsExclusion"
+            );
+
+            if (
+                listeExclusion &&
+                listeExclusion.dataset.chargee !== "oui"
+            ) {
+                etape = "Chargement des étudiants pour les exclusions";
+
+                try {
+                    await chargerEtudiantsPourExclusion();
+                } catch (erreur) {
+                    console.error(
+                        "Erreur chargement étudiants exclusions :",
+                        erreur
+                    );
+                }
+            }
+        }
+
+        if (!profil) return;
+
+        // 4. INITIALISATION DES CHRONOMETRES
+
+        etape = "Initialisation des chronomètres";
+
+        if (intervalleChrono !== null) {
+            clearInterval(intervalleChrono);
+        }
+
+        actualiserChronos();
+
+        intervalleChrono = setInterval(function() {
+            actualiserChronos();
+        }, 1000);
+
+    } catch (erreur) {
+
+        console.error("ÉTAPE DE L'ERREUR :", etape);
+        console.error("ERREUR COMPLÈTE :", erreur);
+
+        conteneur.textContent =
+            "Une erreur est survenue pendant le chargement des activités.";
+
+    }
+}
 
 // AFFICHER LES ACTIVITES
 
 function afficherActivites(activites, conteneur) {
 
-    if (!conteneur) return;
+conteneur.innerHTML = "";
 
-    conteneur.innerHTML = "";
+if (!activites || activites.length === 0) {
+    conteneur.textContent = "Aucune activité enregistrée.";
+    return;
+}
 
-    if (!activites || activites.length === 0) {
-        conteneur.textContent = "Aucune activité enregistrée.";
-        return;
-    }
+activites.forEach(function(activite) {
 
-    activites.forEach(function(activite) {
+    const carte = el("div", "activite-card");
 
-        const carte = document.createElement("div");
-        carte.className = "activite-card";
+    const chrono = el("div", "chrono");
+    chrono.dataset.dateFin = activite.date_fin;
+    chrono.dataset.statut = activite.statut;
 
-        const titre = document.createElement("h3");
-        titre.textContent = activite.titre;
+    chrono.appendChild(el("span", null, "TEMPS RESTANT"));
+    chrono.appendChild(el("strong", null, "--:--:--"));
 
-        const details = document.createElement("p");
-        details.className = "small";
+    const bouton = el("button", null, "Voir les groupes");
 
-        details.textContent =
-            "Maximum par groupe : " + activite.nombre_max +
-            " | Nombre de groupes : " + activite.nombre_max_groupes +
-            " | Étudiants : " + activite.nombre_etudiants;
-
-        const statut = document.createElement("span");
-        statut.className = "statut-activite";
-        statut.textContent = activite.statut;
-
-        const chrono = document.createElement("div");
-        chrono.className = "chrono";
-        chrono.dataset.dateFin = activite.date_fin;
-        chrono.dataset.statut = activite.statut;
-
-        const texte = document.createElement("span");
-        texte.textContent = "TEMPS RESTANT";
-
-        const temps = document.createElement("strong");
-        temps.textContent = "--:--:--";
-
-        chrono.appendChild(texte);
-        chrono.appendChild(temps);
-
-        const bouton = document.createElement("button");
-        bouton.textContent = "Voir les groupes";
-
-        bouton.addEventListener("click", function() {
-
-            chargerGroupes(
-                activite.id,
-                activite.nombre_max,
-                activite.titre
-            );
-
-        });
-
-        carte.appendChild(titre);
-        carte.appendChild(statut);
-        carte.appendChild(details);
-        carte.appendChild(chrono);
-        carte.appendChild(bouton);
-
-        conteneur.appendChild(carte);
-
+    bouton.addEventListener("click", function() {
+        chargerGroupes(
+            activite.id,
+            activite.nombre_max,
+            activite.titre
+        );
     });
-}
 
+    carte.appendChild(el("h3", null, activite.titre));
+    carte.appendChild(el("span", "statut-activite", activite.statut));
 
-// CHARGER LES GROUPES
+    carte.appendChild(el(
+        "p",
+        "small",
+        "Maximum par groupe : " + activite.nombre_max +
+        " | Nombre de groupes : " + activite.nombre_max_groupes +
+        " | Étudiants : " + activite.nombre_etudiants
+    ));
 
-async function chargerGroupes(activiteId, nombreMax, titreActivite) {
+    carte.appendChild(chrono);
+    carte.appendChild(bouton);
 
-    // MEMORISER LES INFORMATIONS DE L'ACTIVITE
+    // BOUTON DE SUPPRESSION : ADMIN UNIQUEMENT
 
-    activiteActuelle.id = activiteId;
-    activiteActuelle.nombreMax = nombreMax;
-    activiteActuelle.titre = titreActivite;
+    if (profil && profil.role === "admin") {
 
-    const zone = document.getElementById("listeGroupesPage");
+        const boutonSupprimer = el(
+            "button",
+            "btn-refuser",
+            "Supprimer"
+        );
 
-    document.getElementById("titreActiviteGroupes").textContent =
-        titreActivite;
-
-    ouvrirPageGroupes();
-
-    zone.innerHTML = "<p>Chargement des groupes...</p>";
-
-
-    // RECUPERER LES GROUPES ET LEURS MEMBRES
-
-    const { data, error } = await client
-        .from("groupes")
-        .select(`
-            id,
-            nom,
-            statut,
-            membres_groupes (
-                etudiant_id,
-                etudiants (
-                    nom,
-                    matricule
-                )
-            )
-        `)
-        .eq("activite_id", activiteId)
-        .order("id", { ascending: true });
-
-    if (error) {
-        zone.textContent = "Erreur : " + error.message;
-        console.error(error);
-        return;
-    }
-
-
-    // RECUPERER L'UTILISATEUR CONNECTE
-
-    const { data: utilisateurConnecte, error: erreurUtilisateur } =
-        await client.auth.getUser();
-
-    if (erreurUtilisateur) {
-        zone.textContent =
-            "Impossible de vérifier l'utilisateur connecté.";
-
-        console.error(erreurUtilisateur);
-        return;
-    }
-
-    const utilisateurId = utilisateurConnecte.user
-        ? utilisateurConnecte.user.id
-        : null;
-
-
-    // VIDER LA ZONE
-
-    zone.innerHTML = "";
-
-    if (!data || data.length === 0) {
-        zone.textContent = "Aucun groupe disponible.";
-        return;
-    }
-
-
-    // AFFICHER CHAQUE GROUPE
-
-    for (const groupe of data) {
-
-        const membres = groupe.membres_groupes || [];
-
-        const nombreMembres = membres.length;
-        const places = nombreMax - nombreMembres;
-
-
-        // VERIFIER SI L'UTILISATEUR EST MEMBRE DU GROUPE
-
-        const estMembre = membres.some(function(membre) {
-
-            return membre.etudiant_id === utilisateurId;
-
+        boutonSupprimer.addEventListener("click", function() {
+            supprimerActivite(
+                activite.id,
+                activite.titre,
+                boutonSupprimer
+            );
         });
 
-
-        // CREER LA CARTE DU GROUPE
-
-        const carte = document.createElement("div");
-        carte.className = "card";
-
-        const nom = document.createElement("h3");
-        nom.textContent = groupe.nom;
-
-        const compteur = document.createElement("p");
-        compteur.textContent =
-            "Membres : " + nombreMembres + " / " + nombreMax;
-
-        const disponibles = document.createElement("p");
-        disponibles.textContent =
-            "Places disponibles : " + Math.max(0, places);
-
-        const statut = document.createElement("p");
-        statut.textContent =
-            places <= 0
-                ? "Statut : COMPLET"
-                : "Statut : OUVERT";
-
-
-        // TITRE DES MEMBRES
-
-        const titreMembres = document.createElement("h4");
-        titreMembres.textContent = "Membres du groupe";
-
-        const liste = document.createElement("ul");
-
-
-        // AFFICHER LES MEMBRES
-
-        if (nombreMembres === 0) {
-
-            const vide = document.createElement("p");
-            vide.textContent = "Aucun membre pour le moment.";
-
-            carte.appendChild(vide);
-
-        } else {
-
-            membres.forEach(function(membre) {
-
-                const element = document.createElement("li");
-
-                let etudiant = membre.etudiants;
-
-                if (Array.isArray(etudiant)) {
-                    etudiant = etudiant[0];
-                }
-
-                if (etudiant) {
-
-                    element.textContent =
-                        etudiant.nom +
-                        " (" + etudiant.matricule + ")";
-
-                } else {
-
-                    element.textContent = "Étudiant inconnu";
-
-                }
-
-                liste.appendChild(element);
-
-            });
-
-        }
-
-
-        // AJOUTER LES INFORMATIONS DU GROUPE
-
-        carte.appendChild(nom);
-        carte.appendChild(compteur);
-        carte.appendChild(disponibles);
-        carte.appendChild(statut);
-        carte.appendChild(titreMembres);
-
-        if (nombreMembres > 0) {
-            carte.appendChild(liste);
-        }
-
-
-        // DEMANDES D'ADHESION
-        // SEULS LES MEMBRES DU GROUPE LES VOIENT
-
-        if (estMembre) {
-
-            const titreDemandes = document.createElement("h4");
-            titreDemandes.textContent = "Demandes d'adhésion";
-
-            const zoneDemandes = document.createElement("div");
-            zoneDemandes.className = "demandes-groupe";
-
-            carte.appendChild(titreDemandes);
-            carte.appendChild(zoneDemandes);
-
-            await chargerDemandes(
-                groupe.id,
-                zoneDemandes
-            );
-
-        }
-
-
-        // BOUTON REJOINDRE
-
-        const boutonRejoindre = document.createElement("button");
-
-        boutonRejoindre.textContent = "Rejoindre ce groupe";
-
-        boutonRejoindre.addEventListener("click", function() {
-
-            rejoindreGroupe(
-                groupe.id,
-                activiteId,
-                nombreMax,
-                titreActivite,
-                boutonRejoindre
-            );
-
-        });
-
-        carte.appendChild(boutonRejoindre);
-
-        zone.appendChild(carte);
-
+        carte.appendChild(boutonSupprimer);
     }
 
-}
+    conteneur.appendChild(carte);
 
+});
+
+}
 
 // ACTUALISER LES CHRONOMETRES
 
 function actualiserChronos() {
 
-    const chronos = document.querySelectorAll(".chrono");
+document.querySelectorAll(".chrono").forEach(function(chrono) {
 
-    chronos.forEach(function(chrono) {
+    const affichage = chrono.querySelector("strong");
+    const texte = chrono.querySelector("span");
 
-        const dateFin = new Date(chrono.dataset.dateFin).getTime();
-        const statut = chrono.dataset.statut;
+    if (chrono.dataset.statut !== "ouverte") {
+        affichage.textContent = "TERMINÉE";
+        chrono.classList.add("chrono-termine");
+        return;
+    }
 
-        const affichage = chrono.querySelector("strong");
-        const texte = chrono.querySelector("span");
+    const dateFin = new Date(chrono.dataset.dateFin).getTime();
 
+    if (isNaN(dateFin)) {
+        affichage.textContent = "--:--:--";
+        return;
+    }
 
-        // ACTIVITE TERMINEE
+    const difference = dateFin - Date.now();
 
-        if (statut !== "ouverte") {
+    if (difference <= 0) {
+        affichage.textContent = "00:00:00";
+        chrono.classList.add("chrono-termine");
+        texte.textContent = "TEMPS ÉCOULÉ — FINALISATION EN ATTENTE";
+        return;
+    }
 
-            affichage.textContent = "TERMINÉE";
+    const heures = Math.floor(difference / 3600000);
+    const minutes = Math.floor((difference % 3600000) / 60000);
+    const secondes = Math.floor((difference % 60000) / 1000);
 
-            chrono.classList.add("chrono-termine");
+    affichage.textContent =
+        String(heures).padStart(2, "0") + ":" +
+        String(minutes).padStart(2, "0") + ":" +
+        String(secondes).padStart(2, "0");
 
-            return;
-        }
-
-
-        // DATE INVALIDE
-
-        if (isNaN(dateFin)) {
-
-            affichage.textContent = "--:--:--";
-
-            return;
-        }
-
-
-        // CALCUL DU TEMPS RESTANT
-
-        const maintenant = Date.now();
-
-        const difference = dateFin - maintenant;
-
-
-        // TEMPS ECOULE
-
-        if (difference <= 0) {
-
-            affichage.textContent = "00:00:00";
-
-            chrono.classList.add("chrono-termine");
-
-            texte.textContent =
-                "TEMPS ÉCOULÉ — FINALISATION EN ATTENTE";
-
-            return;
-        }
-
-
-        // CONVERTIR EN HEURES, MINUTES ET SECONDES
-
-        const heures = Math.floor(difference / 3600000);
-
-        const minutes = Math.floor(
-            (difference % 3600000) / 60000
-        );
-
-        const secondes = Math.floor(
-            (difference % 60000) / 1000
-        );
-
-
-        // AFFICHER LE CHRONOMETRE
-
-        affichage.textContent =
-            String(heures).padStart(2, "0") + ":" +
-            String(minutes).padStart(2, "0") + ":" +
-            String(secondes).padStart(2, "0");
-
-    });
+});
 
 }
-
 
 // CREER UNE ACTIVITE
 
 async function creerActivite() {
 
-    const titre =
-        document.getElementById("titreActivite").value.trim();
+const titre = document.getElementById("titreActivite").value.trim();
+const nombreMax = parseInt(
+    document.getElementById("nombreMax").value,
+    10
+);
+const duree = parseInt(
+    document.getElementById("dureeActivite").value,
+    10
+);
 
-    const nombreMax =
-        parseInt(document.getElementById("nombreMax").value);
+const message = document.getElementById("messageActivite");
+const bouton = document.getElementById("boutonActivite");
 
-    const duree =
-        parseInt(document.getElementById("dureeActivite").value);
+afficherMessage(message, "");
 
-    const message =
-        document.getElementById("messageActivite");
+if (!titre || !nombreMax || !duree) {
+    afficherMessage(
+        message,
+        "Veuillez remplir tous les champs.",
+        "erreur"
+    );
+    return;
+}
 
-    const bouton =
-        document.getElementById("boutonActivite");
+if (nombreMax < 2 || duree < 1) {
+    afficherMessage(
+        message,
+        "Vérifiez le nombre d'étudiants et la durée.",
+        "erreur"
+    );
+    return;
+}
 
+// RECUPERER LES ETUDIANTS EXCLUS
 
-    message.textContent = "";
+const etudiantsExclus = recupererEtudiantsExclus();
 
+bouton.disabled = true;
+bouton.textContent = "Création en cours...";
 
-    // VERIFIER LES CHAMPS
+try {
 
-    if (!titre || !nombreMax || !duree) {
+    const { data, error } = await client.rpc("creer_activite", {
 
-        message.textContent =
-            "Veuillez remplir tous les champs.";
+        p_titre: titre,
 
-        return;
-    }
+        p_description: null,
 
+        p_nombre_max: nombreMax,
 
-    // VERIFIER LES VALEURS
+        p_duree_minutes: duree,
 
-    if (nombreMax < 2 || duree < 1) {
+        // Obligatoire : envoyer un tableau vide
+        // si aucun étudiant n'est exclu.
 
-        message.textContent =
-            "Vérifiez le nombre d'étudiants et la durée.";
+        p_etudiants_exclus: etudiantsExclus
 
-        return;
-    }
+    });
 
+    if (error) throw error;
 
-    // DESACTIVER LE BOUTON
+    // Vérifier la réponse de la fonction SQL.
 
-    bouton.disabled = true;
-
-    bouton.textContent = "Création en cours...";
-
-
-    try {
-
-        const { data, error } = await client.rpc(
-            "creer_activite",
-            {
-                p_titre: titre,
-                p_description: null,
-                p_nombre_max: nombreMax,
-                p_duree_minutes: duree
-            }
+    if (!data || data.succes !== true) {
+        throw new Error(
+            data && data.message
+                ? data.message
+                : "La création de l'activité a échoué."
         );
-
-        if (error) {
-            throw error;
-        }
-
-
-        // MESSAGE DE SUCCES
-
-        message.textContent =
-            "Activité créée avec succès !";
-
-
-        // VIDER LES CHAMPS
-
-        document.getElementById("titreActivite").value = "";
-
-        document.getElementById("nombreMax").value = "";
-
-        document.getElementById("dureeActivite").value = "";
-
-
-        // ACTUALISER LES ACTIVITES
-
-        await chargerActivites();
-
-    } catch (erreur) {
-
-        console.error(
-            "Erreur création activité :",
-            erreur
-        );
-
-        message.textContent =
-            erreur.message || "Une erreur est survenue.";
-
     }
 
+    afficherMessage(
+        message,
+        "Activité créée avec succès ! " +
+        data.nombre_groupes + " groupe(s) créé(s). " +
+        data.nombre_etudiants + " étudiant(s) participant(s).",
+        "succes"
+    );
 
-    // REACTIVER LE BOUTON
+    document.getElementById("titreActivite").value = "";
+    document.getElementById("nombreMax").value = "";
+    document.getElementById("dureeActivite").value = "";
+
+    viderSelectionExclusions();
+
+    await chargerActivites();
+
+} catch (erreur) {
+
+    console.error("Erreur création activité :", erreur);
+
+    afficherMessage(
+        message,
+        messageErreur(erreur, "Une erreur est survenue."),
+        "erreur"
+    );
+
+} finally {
 
     bouton.disabled = false;
-
     bouton.textContent = "Créer l'activité";
 
 }
 
+}
 
-// NAVIGATION VERS LA PAGE DES GROUPES
+// SUPPRIMER UNE ACTIVITE
 
-let espaceActuel = "etudiant";
+async function supprimerActivite(activiteId, titre, bouton) {
 
+if (!profil || profil.role !== "admin") {
+    afficherToast(
+        "Action réservée à l'administrateur.",
+        "erreur"
+    );
+    return;
+}
 
-function ouvrirPageGroupes() {
+const confirmation = confirm(
+    "ATTENTION !\n\n" +
+    "Voulez-vous vraiment supprimer définitivement l'activité : " +
+    titre + " ?\n\n" +
+    "Tous ses groupes, membres et demandes d'adhésion seront également supprimés.\n\n" +
+    "Cette opération est irréversible."
+);
 
-    const admin =
-        document.getElementById("espaceAdmin");
+if (!confirmation) return;
 
-    espaceActuel =
-        admin && getComputedStyle(admin).display !== "none"
-            ? "admin"
-            : "etudiant";
+bouton.disabled = true;
+bouton.textContent = "Suppression...";
 
+try {
 
-    document.getElementById("connexion").style.display = "none";
+    const { data, error } = await client.rpc("supprimer_activite", {
+        p_activite_id: activiteId
+    });
 
-    document.getElementById("espaceAdmin").style.display = "none";
+    if (error) throw error;
 
-    document.getElementById("espaceEtudiant").style.display = "none";
+    if (!data || data.succes !== true) {
+        throw new Error(
+            data && data.message
+                ? data.message
+                : "La suppression n'a pas été confirmée."
+        );
+    }
 
-    document.getElementById("pageGroupes").style.display = "block";
+    if (activiteActuelle.id === activiteId) {
+
+        activiteActuelle = {
+            id: null,
+            nombreMax: null,
+            titre: null
+        };
+
+        montrerSection("espaceAdmin");
+    }
+
+    afficherToast(
+        "L'activité et toutes ses données ont été supprimées.",
+        "succes"
+    );
+
+    await chargerActivites();
+
+} catch (erreur) {
+
+    console.error("Erreur de suppression :", erreur);
+
+    afficherToast(
+        messageErreur(
+            erreur,
+            "Impossible de supprimer cette activité."
+        ),
+        "erreur"
+    );
+
+    bouton.disabled = false;
+    bouton.textContent = "Supprimer";
+}
 
 }
 
+// NAVIGATION
 
 function retourActivites() {
 
-    document.getElementById("pageGroupes").style.display = "none";
+activiteActuelle = {
+    id: null,
+    nombreMax: null,
+    titre: null
+};
 
+montrerSection(
+    profil && profil.role === "admin"
+        ? "espaceAdmin"
+        : "espaceEtudiant"
+);
 
-    if (espaceActuel === "admin") {
-
-        document.getElementById("espaceAdmin").style.display = "block";
-
-    } else {
-
-        document.getElementById("espaceEtudiant").style.display = "block";
-
-    }
+chargerActivites();
 
 }
 
+// CHARGER LES GROUPES
 
-// REJOINDRE UN GROUPE
+async function chargerGroupes(activiteId, nombreMax, titreActivite,groupeCibleId) {
 
-async function rejoindreGroupe(
-    groupeId,
-    activiteId,
-    nombreMax,
-    titreActivite,
-    bouton
+if (!profil) return;
+
+activiteActuelle = {
+    id: activiteId,
+    nombreMax: nombreMax,
+    titre: titreActivite
+};
+
+const zone = document.getElementById("listeGroupesPage");
+
+document.getElementById("titreActiviteGroupes").textContent =
+    titreActivite;
+
+montrerSection("pageGroupes");
+
+zone.textContent = "Chargement des groupes...";
+
+const { data, error } = await client
+    .from("groupes")
+    .select(`
+        id,
+        nom,
+        statut,
+        membres_groupes (
+            etudiant_id,
+            etudiants ( nom, matricule )
+        )
+    `)
+    .eq("activite_id", activiteId)
+    .order("id", { ascending: true });
+
+if (!profil) return;
+
+if (error) {
+    console.error(error);
+    zone.textContent = "Impossible de charger les groupes. Réessayez.";
+    return;
+}
+
+if (!data || data.length === 0) {
+    zone.textContent = "Aucun groupe disponible.";
+    return;
+}
+
+const idsMesGroupes = data
+    .filter(function(groupe) {
+        return estMembreDuGroupe(groupe);
+    })
+    .map(function(groupe) {
+        return groupe.id;
+    });
+
+const demandes = await chargerDemandes(idsMesGroupes);
+
+if (!profil) return;
+
+zone.innerHTML = "";
+
+data.forEach(function(groupe) {
+
+    const carte = creerCarteGroupe(
+        groupe,
+        activiteId,
+        nombreMax,
+        titreActivite,
+        demandes
+    );
+
+    if (
+        groupeCibleId &&
+        Number(groupe.id) === Number(groupeCibleId)
+    ) {
+        carte.classList.add("groupe-cible-notification");
+        carte.id = "groupeCibleNotification";
+    }
+
+    zone.appendChild(carte);
+
+});
+
+if (groupeCibleId) {
+    setTimeout(function() {
+        const cible = document.getElementById("groupeCibleNotification");
+
+        if (cible) {
+            cible.scrollIntoView({
+                behavior: "smooth",
+                block: "center"
+            });
+        }
+    }, 300);
+}
+}
+function estMembreDuGroupe(groupe) {
+
+return (groupe.membres_groupes || []).some(function(membre) {
+
+    return membre.etudiant_id === profil.id ||
+           membre.etudiant_id === profil.authId;
+
+});
+
+}
+
+// CARTE D'UN GROUPE
+
+function creerCarteGroupe(
+groupe,
+activiteId,
+nombreMax,
+titreActivite,
+demandes
 ) {
 
-    bouton.disabled = true;
+const membres = groupe.membres_groupes || [];
 
-    bouton.textContent = "Traitement...";
+const places = Math.max(0, nombreMax - membres.length);
 
+const estMembre = estMembreDuGroupe(groupe);
 
-    try {
+const carte = el("div", "card");
 
-        const { data, error } = await client.rpc(
-            "rejoindre_groupe",
-            {
-                p_groupe_id: groupeId
-            }
-        );
+carte.appendChild(el("h3", null, groupe.nom));
 
-        if (error) {
-            throw error;
-        }
+carte.appendChild(el(
+    "span",
+    places === 0
+        ? "statut-activite statut-complet"
+        : "statut-activite",
+    places === 0 ? "Complet" : "Ouvert"
+));
 
+carte.appendChild(el(
+    "p",
+    null,
+    "Membres : " + membres.length + " / " + nombreMax +
+    " — Places disponibles : " + places
+));
 
-        // RECUPERER LE RESULTAT
+carte.appendChild(el("h4", null, "Membres du groupe"));
 
-        const resultat = Array.isArray(data)
-            ? data[0]
-            : data;
+if (membres.length === 0) {
 
+    carte.appendChild(
+        el("p", null, "Aucun membre pour le moment.")
+    );
 
-        // AFFICHER LE MESSAGE
+} else {
 
-        alert(
-            resultat.message ||
-            "Votre opération a été traitée."
-        );
+    const liste = el("ul");
 
+    membres.forEach(function(membre) {
 
-        // ACTUALISER LES GROUPES
-
-        await chargerGroupes(
-            activiteId,
-            nombreMax,
-            titreActivite
-        );
-
-    } catch (erreur) {
-
-        console.error("Erreur :", erreur);
-
-        alert(
-            erreur.message ||
-            "Une erreur est survenue."
-        );
-
-
-        // REACTIVER LE BOUTON
-
-        bouton.disabled = false;
-
-        bouton.textContent = "Rejoindre ce groupe";
-
-    }
-
-}
-
-
-// CHARGER LES DEMANDES D'ADHESION
-
-async function chargerDemandes(groupeId, conteneur) {
-
-    conteneur.innerHTML =
-        "<p>Chargement des demandes...</p>";
-
-
-    const { data, error } = await client
-        .from("demandes_adhesion")
-        .select(`
-            id,
-            etudiant_id,
-            statut,
-            created_at,
-            etudiants (
-                nom,
-                matricule
-            )
-        `)
-        .eq("groupe_id", groupeId)
-        .eq("statut", "en_attente")
-        .order("created_at", { ascending: true });
-
-
-    // ERREUR
-
-    if (error) {
-
-        conteneur.textContent =
-            "Erreur : " + error.message;
-
-        console.error(error);
-
-        return;
-    }
-
-
-    // VIDER LA ZONE
-
-    conteneur.innerHTML = "";
-
-
-    // AUCUNE DEMANDE
-
-    if (!data || data.length === 0) {
-
-        conteneur.textContent =
-            "Aucune demande en attente.";
-
-        return;
-    }
-
-
-    // AFFICHER CHAQUE DEMANDE
-
-    data.forEach(function(demande) {
-
-        const carte = document.createElement("div");
-
-        carte.className = "card";
-
-
-        // NOM DE L'ETUDIANT
-
-        const nom = document.createElement("p");
-
-        let etudiant = demande.etudiants;
+        let etudiant = membre.etudiants;
 
         if (Array.isArray(etudiant)) {
             etudiant = etudiant[0];
         }
 
-        nom.textContent = etudiant
-            ? etudiant.nom + " (" + etudiant.matricule + ")"
-            : "Étudiant inconnu";
-
-
-        // DATE DE LA DEMANDE
-
-        const date = document.createElement("p");
-
-        date.textContent =
-            "Demande envoyée le : " +
-            new Date(demande.created_at).toLocaleString("fr-FR");
-
-
-        carte.appendChild(nom);
-
-        carte.appendChild(date);
-
-
-        // BOUTON ACCEPTER
-
-        const boutonAccepter = document.createElement("button");
-
-        boutonAccepter.textContent = "Accepter";
-
-        boutonAccepter.addEventListener("click", function() {
-
-            traiterDemande(
-                demande.id,
-                "accepter",
-                boutonAccepter
-            );
-
-        });
-
-
-        // BOUTON REFUSER
-
-        const boutonRefuser = document.createElement("button");
-
-        boutonRefuser.textContent = "Refuser";
-
-        boutonRefuser.addEventListener("click", function() {
-
-            traiterDemande(
-                demande.id,
-                "refuser",
-                boutonRefuser
-            );
-
-        });
-
-
-        // AJOUTER LES BOUTONS
-
-        carte.appendChild(boutonAccepter);
-
-        carte.appendChild(boutonRefuser);
-
-
-        // AJOUTER LA DEMANDE
-
-        conteneur.appendChild(carte);
+        liste.appendChild(el(
+            "li",
+            null,
+            etudiant
+                ? etudiant.nom + " (" + etudiant.matricule + ")"
+                : "Étudiant inconnu"
+        ));
 
     });
 
+    carte.appendChild(liste);
 }
 
+if (estMembre) {
+
+    carte.appendChild(
+        el("h4", null, "Demandes d'adhésion")
+    );
+
+    const zoneDemandes = el("div", "demandes-groupe");
+
+    if (demandes === null) {
+
+        zoneDemandes.textContent =
+            "Impossible de charger les demandes.";
+
+    } else {
+
+        afficherDemandes(
+            zoneDemandes,
+            demandes.get(groupe.id) || []
+        );
+
+    }
+
+    carte.appendChild(zoneDemandes);
+}
+
+if (estMembre) {
+
+    carte.appendChild(
+        el("p", "small", "Vous faites partie de ce groupe.")
+    );
+
+} else if (profil.role === "etudiant" && places > 0) {
+
+    const boutonRejoindre = el(
+        "button",
+        null,
+        "Rejoindre ce groupe"
+    );
+
+    boutonRejoindre.addEventListener("click", function() {
+
+        rejoindreGroupe(
+            groupe.id,
+            activiteId,
+            nombreMax,
+            titreActivite,
+            boutonRejoindre
+        );
+
+    });
+
+    carte.appendChild(boutonRejoindre);
+}
+
+return carte;
+
+}
+
+//REJOINDRE UN GROUPE
+async function rejoindreGroupe(
+groupeId,
+activiteId,
+nombreMax,
+titreActivite,
+bouton
+) {
+
+bouton.disabled = true;
+bouton.textContent = "Traitement...";
+
+try {
+
+    const { data, error } = await client.rpc(
+        "rejoindre_groupe",
+        {
+            p_groupe_id: groupeId
+        }
+    );
+
+    if (error) throw error;
+
+    const resultat = Array.isArray(data) ? data[0] : data;
+
+    if (!resultat) {
+        throw new Error("Réponse invalide du serveur.");
+    }
+
+    // AFFICHER DIRECTEMENT LE MESSAGE SQL
+
+    afficherToast(
+        resultat.message || "Opération terminée.",
+        resultat.succes === true ? "succes" : "erreur"
+    );
+
+    // Actualiser les groupes
+
+    await chargerGroupes(
+        activiteId,
+        nombreMax,
+        titreActivite
+    );
+
+} catch (erreur) {
+
+    console.error("Erreur rejoindreGroupe :", erreur);
+
+    afficherToast(
+        messageErreur(
+            erreur,
+            "Impossible de rejoindre ce groupe. Réessayez."
+        ),
+        "erreur"
+    );
+
+    bouton.disabled = false;
+    bouton.textContent = "Rejoindre ce groupe";
+
+}
+
+}
+
+// CHARGER LES DEMANDES D'ADHESION
+
+async function chargerDemandes(idsGroupes) {
+
+const parGroupe = new Map();
+
+if (idsGroupes.length === 0) return parGroupe;
+
+const { data, error } = await client
+    .from("demandes_adhesion")
+    .select(`
+        id,
+        groupe_id,
+        created_at,
+        etudiants ( nom, matricule )
+    `)
+    .in("groupe_id", idsGroupes)
+    .eq("statut", "en_attente")
+    .order("created_at", { ascending: true });
+
+if (error) {
+    console.error(error);
+    return null;
+}
+
+data.forEach(function(demande) {
+
+    if (!parGroupe.has(demande.groupe_id)) {
+        parGroupe.set(demande.groupe_id, []);
+    }
+
+    parGroupe.get(demande.groupe_id).push(demande);
+
+});
+
+return parGroupe;
+
+}
+
+// AFFICHER LES DEMANDES D'UN GROUPE
+
+function afficherDemandes(conteneur, demandes) {
+
+if (demandes.length === 0) {
+    conteneur.textContent = "Aucune demande en attente.";
+    return;
+}
+
+demandes.forEach(function(demande) {
+
+    const carte = el("div", "card");
+
+    let etudiant = demande.etudiants;
+
+    if (Array.isArray(etudiant)) {
+        etudiant = etudiant[0];
+    }
+
+    carte.appendChild(el(
+        "p",
+        null,
+        etudiant
+            ? etudiant.nom + " (" + etudiant.matricule + ")"
+            : "Étudiant inconnu"
+    ));
+
+    carte.appendChild(el(
+        "p",
+        "small",
+        "Demande envoyée le : " +
+        new Date(demande.created_at).toLocaleString("fr-FR")
+    ));
+
+    const boutonAccepter = el(
+        "button",
+        "btn-accepter",
+        "Accepter"
+    );
+
+    boutonAccepter.addEventListener("click", function() {
+        traiterDemande(
+            demande.id,
+            "accepter",
+            boutonAccepter
+        );
+    });
+
+    const boutonRefuser = el(
+        "button",
+        "btn-refuser",
+        "Refuser"
+    );
+
+    boutonRefuser.addEventListener("click", function() {
+        traiterDemande(
+            demande.id,
+            "refuser",
+            boutonRefuser
+        );
+    });
+
+    carte.appendChild(boutonAccepter);
+    carte.appendChild(boutonRefuser);
+
+    conteneur.appendChild(carte);
+
+});
+
+}
 
 // ACCEPTER OU REFUSER UNE DEMANDE
 
-async function traiterDemande(
-    demandeId,
-    action,
-    bouton
-) {
+async function traiterDemande(demandeId, action, bouton) {
 
-    bouton.disabled = true;
+const libelle = action === "accepter"
+    ? "Accepter"
+    : "Refuser";
 
-    bouton.textContent = "Traitement...";
+bouton.disabled = true;
+bouton.textContent = "Traitement...";
 
+try {
 
-    // CHOISIR LA FONCTION RPC
-
-    const nomFonction = action === "accepter"
-        ? "accepter_demande"
-        : "refuser_demande";
-
-
-    try {
-
-        const { data, error } = await client.rpc(
-            nomFonction,
-            {
-                p_demande_id: demandeId
-            }
-        );
-
-        if (error) {
-            throw error;
+    const { data, error } = await client.rpc(
+        action === "accepter"
+            ? "accepter_demande"
+            : "refuser_demande",
+        {
+            p_demande_id: demandeId
         }
+    );
 
+    if (error) throw error;
 
-        // RECUPERER LE RESULTAT
+    const resultat = Array.isArray(data) ? data[0] : data;
 
-        const resultat = Array.isArray(data)
-            ? data[0]
-            : data;
+    if (!resultat) {
+        throw new Error("Réponse invalide du serveur.");
+    }
 
+    // AFFICHER LE MESSAGE RETOURNÉ PAR SQL
 
-        // AFFICHER LE MESSAGE
+    afficherToast(
+        resultat.message || "Opération terminée.",
+        resultat.succes === true ? "succes" : "erreur"
+    );
 
-        alert(
-            resultat.message ||
-            "Opération effectuée."
+    // Actualiser les groupes
+
+    if (activiteActuelle.id !== null) {
+
+        await chargerGroupes(
+            activiteActuelle.id,
+            activiteActuelle.nombreMax,
+            activiteActuelle.titre
         );
-
-
-        // RECHARGER AUTOMATIQUEMENT LES GROUPES
-
-        if (activiteActuelle.id !== null) {
-
-            await chargerGroupes(
-                activiteActuelle.id,
-                activiteActuelle.nombreMax,
-                activiteActuelle.titre
-            );
-
-        }
-
-    } catch (erreur) {
-
-        console.error("Erreur :", erreur);
-
-        alert(
-            erreur.message ||
-            "Une erreur est survenue."
-        );
-
-
-        // REACTIVER LE BOUTON
-
-        bouton.disabled = false;
-
-        bouton.textContent =
-            action === "accepter"
-                ? "Accepter"
-                : "Refuser";
 
     }
+
+} catch (erreur) {
+
+    console.error("Erreur traitement demande :", erreur);
+
+    afficherToast(
+        messageErreur(
+            erreur,
+            "Impossible de traiter cette demande. Réessayez."
+        ),
+        "erreur"
+    );
+
+    bouton.disabled = false;
+    bouton.textContent = libelle;
+
+}
 
 }
